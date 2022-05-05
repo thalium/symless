@@ -144,13 +144,13 @@ def recover_names_from_vtables(ctx: model.context_t) -> set:
     names_cflt = dict()  # name -> set of models
 
     # Get name for each struct
-    for model in ctx.get_models():
+    for mod in ctx.get_models():
 
-        if model.has_name():
+        if mod.has_name():
             continue
 
-        if model.is_vtable():
-            derived, parent = get_classnames_from_vtable(model.get_ea())
+        if mod.is_vtable():
+            derived, parent = get_classnames_from_vtable(mod.get_ea())
             if derived is None:
                 continue
 
@@ -163,10 +163,10 @@ def recover_names_from_vtables(ctx: model.context_t) -> set:
 
             # no conflict on vtable name
             if name in names_cflt:
-                name = f"{base}_{model.get_ea():x}{idaapi.VTBL_SUFFIX}"
+                name = f"{base}_{mod.get_ea():x}{idaapi.VTBL_SUFFIX}"
 
         else:
-            vtbl_sid = model.get_vtable(0)
+            vtbl_sid = mod.get_vtable(0)
             if vtbl_sid < 0:
                 continue
 
@@ -178,7 +178,7 @@ def recover_names_from_vtables(ctx: model.context_t) -> set:
 
         if name not in names_cflt:
             names_cflt[name] = set()
-        names_cflt[name].add(model)
+        names_cflt[name].add(mod)
 
     # solve conflicts
     for name in names_cflt:
@@ -191,32 +191,32 @@ def recover_names_from_vtables(ctx: model.context_t) -> set:
 # use symbols to name vtable members
 def recover_virtual_functions_names(ctx: model.context_t):
     ptr_size = ida_utils.get_ptr_size()
-    for model in ctx.get_models():
-        if not model.is_vtable():
+    for mod in ctx.get_models():
+        if not mod.is_vtable():
             continue
 
         i = 0
         presents = set()
-        for fea in ida_utils.vtable_members(model.get_ea()):
+        for fea in ida_utils.vtable_members(mod.get_ea()):
             if has_name(fea):
                 name = get_method_name_from_signature(ida_utils.demangle(idaapi.get_name(fea)))
                 if name not in presents:
-                    model.members_names[i] = name
+                    mod.members_names[i] = name
                     presents.add(name)
                 else:
-                    model.members_names[i] = f"{name}_{(i * ptr_size):x}"
+                    mod.members_names[i] = f"{name}_{(i * ptr_size):x}"
             i += 1
 
 
 # recover name from ctor_ea for all unamed objects
 def last_chance_name_recovery(ctx: model.context_t, names: set):
-    for model in ctx.get_models():
-        if model.has_name() or model.ctor_ea is None:
+    for mod in ctx.get_models():
+        if mod.has_name() or mod.ctor_ea is None:
             continue
 
-        objname = get_classname_from_ctor(ida_utils.demangle(idaapi.get_name(model.ctor_ea)))
+        objname = get_classname_from_ctor(ida_utils.demangle(idaapi.get_name(mod.ctor_ea)))
         if objname is not None and objname not in names:
-            model.set_name(objname)
+            mod.set_name(objname)
             names.add(objname)
 
 

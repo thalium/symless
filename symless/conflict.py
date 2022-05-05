@@ -266,8 +266,8 @@ def find_less_derived_class(candidates: list):
         i = 1
         selected = unknown[0]
 
-    l = len(unknown)
-    while i < l:
+    size = len(unknown)
+    while i < size:
         # selected derives from unknown[i]
         if unknown[i].get_vtable(0) in selected.vtables[0][0:-1]:
             selected = unknown[i]
@@ -280,8 +280,8 @@ def find_less_derived_class(candidates: list):
 def find_less_derived_vtable(candidates: list):
     out_vtbl, out_shift = candidates[0]
 
-    i, l = 1, len(candidates)
-    while i < l:
+    i, size = 1, len(candidates)
+    while i < size:
 
         most_derived = model.most_derived_vtable_from_cache(out_vtbl, candidates[i][0])
         if most_derived == out_vtbl:
@@ -434,9 +434,9 @@ def get_unresolved_conflicts_count(ctx: model.context_t):
 def solve_conflicts(ctx: model.context_t, verbose: bool = True):
 
     # Select vtable owner
-    for model in ctx.get_models():
-        if model.is_vtable():
-            select_vtable_owner(model)
+    for mod in ctx.get_models():
+        if mod.is_vtable():
+            select_vtable_owner(mod)
 
     if verbose:
         print("Info: conflicts count before resolution: %d" % get_unresolved_conflicts_count(ctx))

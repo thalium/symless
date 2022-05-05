@@ -1,5 +1,3 @@
-import collections
-
 import idaapi
 import idautils
 import idc

@@ -2,7 +2,7 @@ import os
 
 import idaapi
 
-from symless import conflict, existing, generation, ida_utils, model, symbols
+from symless import conflict, existing, generation, model, symbols
 from symless.cpustate import arch, cpustate
 
 RESOURCES_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "symless", "resources"))
@@ -62,8 +62,8 @@ class BuildHandler(idaapi.action_handler_t):
 
             # stats output
             print("Updated / created %d structures:" % len(context.models))
-            for model in context.get_models():
-                print("  - %s" % model.get_name())
+            for mod in context.get_models():
+                print("  - %s" % mod.get_name())
 
         finally:
             idaapi.hide_wait_box()
@@ -248,9 +248,9 @@ def propagate_struct(
     struc_model, context = existing.from_structure(struc)
 
     # inject after update if on dst operand, before update if on src operand
-    inject_cb = lambda state, ea: injector(
-        state, ea, start_ea, target_reg, cpustate.sid_t(struc_model.sid, shift)
-    )
+    def inject_cb(state, ea):
+        return injector(state, ea, start_ea, target_reg, cpustate.sid_t(struc_model.sid, shift))
+
     inject = cpustate.injector_t(inject_cb, not on_dst_op)
 
     params = cpustate.propagation_param_t(inject, cpustate.MAX_PROPAGATION_RECURSION if dive else 0)

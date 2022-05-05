@@ -106,6 +106,7 @@ def cmd_main():
 
 if __name__ == "__main__":
     try:
+        # flake8: noqa: F401
         import ida_ida
         import idaapi
         import idc

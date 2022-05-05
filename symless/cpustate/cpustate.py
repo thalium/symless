@@ -275,7 +275,7 @@ def handle_test(state: state_t, insn: idaapi.insn_t, op1: idaapi.op_t, op2: idaa
 # list of (list[insn.itype], tuple(ops.type), handler)
 g_insn_handlers = [
     (
-        ### 1 operand instructions ###
+        # 1 operand instructions
         ([idaapi.NN_push], (idaapi.o_reg,), handle_push_reg),  # push rbp
         ([idaapi.NN_push], (idaapi.o_imm,), handle_push_imm),  # push 42h
         ([idaapi.NN_push], (idaapi.o_displ,), handle_ignored_push_pop),  # push [ebp+var_14]
@@ -289,7 +289,7 @@ g_insn_handlers = [
         (INSN_JUMPS, (0,), handle_jump),  # jne  ?
     ),
     (
-        ### 2 operands instructions ###
+        # 2 operands instructions
         (INSN_MOVES, (idaapi.o_phrase, idaapi.o_reg), handle_mov_disp_reg),  # mov [rcx], rax
         (INSN_MOVES, (idaapi.o_displ, idaapi.o_reg), handle_mov_disp_reg),  # mov [rcx+10h], rax
         (INSN_MOVES, (idaapi.o_phrase, idaapi.o_imm), handle_mov_disp_imm),  # mov [rcx], 10h
@@ -685,7 +685,7 @@ def should_propagate_in_callee(insn: idaapi.insn_t, state: state_t, params: prop
         return (False, False, None)
 
     op = insn.ops[0]
-    if not op.type in [idaapi.o_mem, idaapi.o_far, idaapi.o_near]:
+    if op.type not in [idaapi.o_mem, idaapi.o_far, idaapi.o_near]:
         return (False, is_call, op.addr)
 
     addr = op.addr

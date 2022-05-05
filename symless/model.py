@@ -6,7 +6,6 @@ import idaapi
 import idautils
 
 import symless.config as config
-import symless.cpustate.arch as arch
 import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
 
@@ -65,7 +64,7 @@ class model_t:
         if self.size > 0 and (offset + ida_utils.get_ptr_size()) > self.size:
             return False
 
-        if not offset in self.vtables:
+        if offset not in self.vtables:
             self.vtables[offset] = list()
         self.vtables[offset].append(vtable_sid)
 

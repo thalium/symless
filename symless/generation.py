@@ -297,9 +297,9 @@ def generate_structs(ctx: model.context_t) -> int:
     )
 
     # generate empty strucs to be used as types
-    for model in ctx.get_models():
-        if not model.is_empty():
-            idaapi.add_struc(idaapi.BADADDR, model.get_name(), False)
+    for mod in ctx.get_models():
+        if not mod.is_empty():
+            idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
 
     # type functions
     set_allocators_type(ctx.allocators)
@@ -307,11 +307,11 @@ def generate_structs(ctx: model.context_t) -> int:
 
     # populate structures
     total = 0
-    for model in ctx.get_models():
-        if model.is_empty():
+    for mod in ctx.get_models():
+        if mod.is_empty():
             continue
 
-        generate_struct(model, ctx)
+        generate_struct(mod, ctx)
         total += 1
 
     return total

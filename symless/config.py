@@ -1,5 +1,4 @@
 import enum
-import os
 import re
 
 import idaapi
@@ -200,7 +199,6 @@ def parse_allocator(declaration: str) -> (allocator_t, list):
 # reads config.csv data to find memory allocators in the binary, used as entry points
 def get_entry_points(config_path: str):
     imports = []
-    basename = os.path.basename(config_path)
 
     try:
         config = open(config_path)
