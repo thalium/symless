@@ -23,6 +23,20 @@ msvcrt, malloc, malloc
 msvcrt, calloc, calloc
 msvcrt, realloc, realloc # use realloc as entry point ?
 
+# Windows kernel
+ntoskrnl, ExAllocatePool, malloc(1)
+ntoskrnl, ExAllocatePool2, malloc(1)
+ntoskrnl, ExAllocatePool3, malloc(1)
+ntoskrnl, ExAllocatePoolZero, malloc(1)
+ntoskrnl, ExAllocatePoolPriorityUninitialized, malloc(1)
+ntoskrnl, ExAllocatePoolPriorityZero, malloc(1)
+ntoskrnl, ExAllocatePoolQuotaUninitialized, malloc(1)
+ntoskrnl, ExAllocatePoolQuotaZero, malloc(1)
+ntoskrnl, ExAllocatePoolUninitialized, malloc(1)
+ntoskrnl, ExAllocatePoolWithQuota, malloc(1)
+ntoskrnl, ExAllocatePoolWithQuotaTag, malloc(1)
+ntoskrnl, ExAllocatePoolWithTag, malloc(1)
+ntoskrnl, ExAllocatePoolWithTagPriority, malloc(1)
 
 # GLIBC 2.31
 .dynsym, malloc@@GLIBC_2.0, malloc
