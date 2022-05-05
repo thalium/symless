@@ -82,7 +82,7 @@ class reg_cc_abi_t(abi_t):
 class stack_cc_abi_t(abi_t):
     def __init__(self, name: str, ret: str, stack_ptr: str, max_args_count: int = 4):
         super().__init__(name, ret, stack_ptr)
-        self.max_args_count = max_args_count # increase default ?
+        self.max_args_count = max_args_count  # increase default ?
 
     def get_arg_count(self) -> int:
         return self.max_args_count
@@ -91,7 +91,7 @@ class stack_cc_abi_t(abi_t):
     # or None if rsp does not track stack
     def first_args_index(self, state: state_t, from_callee: bool):
         if from_callee:
-            return 4 # after saved eip
+            return 4  # after saved eip
         ptr = self.get_stack_ptr(state)
         if not isinstance(ptr, stack_ptr_t):
             return None
@@ -146,17 +146,22 @@ def get_abi() -> abi_t:
 
     return selected
 
+
 def is_arch_supported() -> bool:
     return is_filetype_supported() and is_proc_supported()
+
 
 def is_filetype_supported() -> bool:
     return idaapi.inf_get_filetype() in [idaapi.f_PE, idaapi.f_ELF]
 
+
 def is_elf() -> bool:
     return idaapi.inf_get_filetype() == idaapi.f_ELF
 
+
 def is_proc_supported() -> bool:
-    return idaapi.inf_get_procname() == 'metapc'
+    return idaapi.inf_get_procname() == "metapc"
+
 
 def get_proc_name() -> str:
     return idaapi.inf_get_procname()
@@ -203,16 +208,16 @@ class win_32_abi_t(win_32_thiscall_abi_t):
     def __init__(self):
         super().__init__()
         self.name = "Microsoft i386"
-        self.max_args_count = 5 # ecx + 4 args from stack
+        self.max_args_count = 5  # ecx + 4 args from stack
 
         # possible ABIs for a function
         self.stdcall = win_32_stdcall_abi_t()
         self.thiscall = win_32_thiscall_abi_t()
 
     def guess_function_cc(self, guessed_args_count: int, individual_validation: list) -> tuple:
-        if individual_validation[0]: # ecx is used (thiscall)
+        if individual_validation[0]:  # ecx is used (thiscall)
             return (self.thiscall, 0, guessed_args_count)
-        return (self.stdcall, 1, max(0, guessed_args_count - 1)) # default __stdcall
+        return (self.stdcall, 1, max(0, guessed_args_count - 1))  # default __stdcall
 
     def get_default_cc(self):
         return self.stdcall
@@ -238,5 +243,5 @@ class win_64_abi_t(reg_cc_abi_t):
 # System V i386 ABI
 class systemv_32_abi_t(stack_cc_abi_t):
     def __init__(self):
-        super().__init__("System V i386", "rax", "rsp") # rax & eax have the same reg_id in IDA
+        super().__init__("System V i386", "rax", "rsp")  # rax & eax have the same reg_id in IDA
         self.cc = idaapi.CM_CC_STDCALL

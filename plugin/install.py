@@ -5,13 +5,13 @@ import os
 import shutil
 import sys
 
-'''
+"""
     Installs the symless plugin into your IDA plugins,
-    uses the IDA_DIR env to locate IDA installation    
+    uses the IDA_DIR env to locate IDA installation
 
     Install: $ python3 install.py
     Uninstall: $ python3 install.py -u
-'''
+"""
 
 to_copy = [("symless_plugin.py", False), ("../symless", True)]
 
@@ -50,7 +50,7 @@ if __name__ == "__main__":
                 shutil.copy(src, dst)
         else:
             if is_dir:
-                shutil.rmtree(dst, ignore_errors = True)
+                shutil.rmtree(dst, ignore_errors=True)
             else:
                 try:
                     os.unlink(dst)

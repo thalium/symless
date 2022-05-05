@@ -3,12 +3,12 @@ import idaapi
 import symless.ida_utils as ida_utils
 import symless.model as model
 
-''' From existing structure back to model '''
+""" From existing structure back to model """
 
 
 # convert an existing struct to a model
 def from_structure(struc: idaapi.struc_t, ea: int = None) -> (model.model_t, model.context_t):
-    out = model.model_t(-1, ea, type = model.model_type.STRUCTURE_UKWN_SIZE)
+    out = model.model_t(-1, ea, type=model.model_type.STRUCTURE_UKWN_SIZE)
     out.set_name(idaapi.get_struc_name(struc.id))
 
     context = model.context_t()
@@ -17,7 +17,7 @@ def from_structure(struc: idaapi.struc_t, ea: int = None) -> (model.model_t, mod
     for member in struc.members:
         name = idaapi.get_member_name(member.id)
 
-        if not name.startswith("padd_"): # ignore padding fields
+        if not name.startswith("padd_"):  # ignore padding fields
             out.add_member(member.soff, idaapi.get_member_size(member))
 
             # check for vtable ptr
@@ -29,7 +29,9 @@ def from_structure(struc: idaapi.struc_t, ea: int = None) -> (model.model_t, mod
                 if vtbl_struc is not None:
                     v_ea, v_name = ida_utils.get_vtable_ea(vtbl_struc)
                     if v_ea != idaapi.BADADDR:
-                        vtable = context.get_or_create_vtable(v_ea, idaapi.get_struc_size(vtbl_struc))
+                        vtable = context.get_or_create_vtable(
+                            v_ea, idaapi.get_struc_size(vtbl_struc)
+                        )
                         out.add_vtable(member.soff, vtable.sid)
 
     return (out, context)
@@ -43,7 +45,7 @@ def remove_padd_fields(struc: idaapi.struc_t):
     while offset < size and offset != idaapi.BADADDR:
         member = idaapi.get_member(struc, offset)
 
-        if member is not None: # avoid undefined fields
+        if member is not None:  # avoid undefined fields
             name = idaapi.get_member_name(member.id)
             if name.startswith("padd_"):
                 idaapi.del_struc_member(struc, offset)

@@ -1,18 +1,20 @@
-import idaapi
-import idc
-import idautils
-
 import collections
+
+import idaapi
+import idautils
+import idc
 
 import symless.cpustate.cpustate as cpustate
 
-''' Imports utilities '''
+""" Imports utilities """
+
 
 def get_import_module_index(name: str) -> int:
     for i in range(idaapi.get_import_module_qty()):
         if idaapi.get_import_module_name(i) == name:
             return i
     return None
+
 
 # Get ea of given import, from given module
 def get_import_from_module(module: int, import_name: str) -> int:
@@ -29,7 +31,8 @@ def get_import_from_module(module: int, import_name: str) -> int:
     return import_ea
 
 
-''' Names utilities '''
+""" Names utilities """
+
 
 def demangle(name: str, inf_attr=idc.INF_SHORT_DN) -> str:
     if not name:
@@ -42,16 +45,19 @@ def demangle(name: str, inf_attr=idc.INF_SHORT_DN) -> str:
     return name
 
 
-''' Xrefs utilities '''
+""" Xrefs utilities """
 
 # The following functions can be time-consuming when an address has numerous xref
 # every xref has to be fetch using an API call
 
+
 def get_references(address: int) -> [int]:
     return [ref for ref in idautils.CodeRefsTo(address, 0)]
 
+
 def get_data_references(address: int) -> [int]:
     return [ref for ref in idautils.DataRefsTo(address)]
+
 
 def get_all_references(address: int) -> set:
     crefs = get_references(address)
@@ -59,16 +65,20 @@ def get_all_references(address: int) -> set:
     return set(crefs + drefs)
 
 
-''' Pointers utilities '''
+""" Pointers utilities """
+
 
 def get_ptr_size():
     return 8 if idaapi.get_inf_structure().is_64bit() else 4
 
+
 def __dereference_pointer(addr: int, ptr_size: int) -> int:
     return idaapi.get_qword(addr) if ptr_size == 8 else idaapi.get_dword(addr)
 
+
 def dereference_pointer(addr: int) -> int:
     return __dereference_pointer(addr, get_ptr_size())
+
 
 def dereference_function_ptr(addr: int, ptr_size: int) -> bool:
     fea = __dereference_pointer(addr, ptr_size)
@@ -76,6 +86,7 @@ def dereference_function_ptr(addr: int, ptr_size: int) -> bool:
     if func is None or func.start_ea != fea:  # addr is a function entry point
         return None
     return fea
+
 
 # get size bytes from given ea, if ea is initialized with a value
 def get_nb_bytes(ea: int, size: int) -> int:
@@ -91,6 +102,7 @@ def get_nb_bytes(ea: int, size: int) -> int:
 
     return idaapi.get_byte(ea)
 
+
 # return true if data at given ea & size has a value
 def is_data_initialized(ea: int, size: int) -> bool:
 
@@ -98,7 +110,7 @@ def is_data_initialized(ea: int, size: int) -> bool:
     return idaapi.is_loaded(ea) and idaapi.is_loaded(ea + size - 1)
 
 
-''' Vftable utilities '''
+""" Vftable utilities """
 
 # can instruction at given ea load a vtable
 def is_vtable_load(ea: int) -> bool:
@@ -109,13 +121,18 @@ def is_vtable_load(ea: int) -> bool:
     if idaapi.decode_insn(insn, ea) == 0:
         return False
 
-    if insn.itype not in [idaapi.NN_lea, idaapi.NN_mov] or insn.ops[0].type not in (idaapi.o_reg, idaapi.o_phrase, idaapi.o_displ):
+    if insn.itype not in [idaapi.NN_lea, idaapi.NN_mov] or insn.ops[0].type not in (
+        idaapi.o_reg,
+        idaapi.o_phrase,
+        idaapi.o_displ,
+    ):
         return False
 
     # type 1: lea/mov rax, vtbl
     # type 2: lea/mov rax, [eax + vtbl_offset] (PIE case)
     return insn.ops[1].type in [idaapi.o_mem, idaapi.o_displ, idaapi.o_imm]
- 
+
+
 # is vtable loaded at addr load stored later in a struct disp
 # returns the stored value if it is the case
 # TODO: miss mv [rax + rcx*2 + 16], rbx, even if we won't use it
@@ -139,6 +156,7 @@ def is_vtable_stored(load: int, loaded: int) -> int:
 
     return idaapi.BADADDR
 
+
 # is given ea a vtable or a vtable ref (.got)
 # returns effective vtable address
 def is_vtable_start(ea: int) -> int:
@@ -154,7 +172,7 @@ def is_vtable_start(ea: int) -> int:
         # value from ea is stored into a struct
         stored_value = is_vtable_stored(xref, ea)
         if stored_value == idaapi.BADADDR:
-            continue # continue because we miss the "mov [rax + rcx*n], vtbl" instructions
+            continue  # continue because we miss the "mov [rax + rcx*n], vtbl" instructions
 
         # stored addr points to a functions ptrs array
         if vtable_size(stored_value) == 0:
@@ -163,6 +181,7 @@ def is_vtable_start(ea: int) -> int:
         return stored_value
 
     return idaapi.BADADDR
+
 
 # Returns function ea if function at given addr is in vtable, None otherwise
 def is_in_vtable(start_addr: int, addr: int, ptr_size: int):
@@ -181,6 +200,7 @@ def is_in_vtable(start_addr: int, addr: int, ptr_size: int):
 
     return fea
 
+
 # yield all members of given vtable
 def vtable_members(addr: int):
     ptr_size = get_ptr_size()
@@ -192,9 +212,11 @@ def vtable_members(addr: int):
         current += ptr_size
         fea = is_in_vtable(addr, current, ptr_size)
 
+
 def vtable_size(addr: int) -> int:
     vtbl = [fea for fea in vtable_members(addr)]
     return len(vtbl) * get_ptr_size()
+
 
 # scans given segment for vtables
 # WARN: will not return vtables only used at virtual bases (vbase)
@@ -217,6 +239,7 @@ def get_all_vtables_in(seg: idaapi.segment_t):
 
         current = idaapi.next_head(current, seg.end_ea)
 
+
 # scans code segments for vtables
 def get_all_vtables():
     seg = idaapi.get_first_seg()
@@ -229,6 +252,7 @@ def get_all_vtables():
 
         seg = idaapi.get_next_seg(seg.start_ea)
 
+
 # vtable ea from already existing vtable struc
 def get_vtable_ea(vtable: idaapi.struc_t) -> (int, str):
     name = idaapi.get_struc_name(vtable.id)
@@ -236,6 +260,7 @@ def get_vtable_ea(vtable: idaapi.struc_t) -> (int, str):
         return idaapi.BADADDR, name
 
     return idaapi.get_first_dref_to(vtable.id), name
+
 
 # get vtable struc typing the given vtable ea
 def get_ea_vtable(ea: int) -> idaapi.struc_t:
@@ -245,7 +270,7 @@ def get_ea_vtable(ea: int) -> idaapi.struc_t:
     return struc_from_tinfo(tinfo)
 
 
-''' Type utilities '''
+""" Type utilities """
 
 # get basic type
 def get_basic_type(type: int) -> idaapi.tinfo_t:
@@ -253,17 +278,20 @@ def get_basic_type(type: int) -> idaapi.tinfo_t:
     tinfo.create_simple_type(type)
     return tinfo
 
+
 # returns void* tinfo_t
 def void_ptr() -> idaapi.tinfo_t:
     tinfo = get_basic_type(idaapi.BT_VOID)
     tinfo.create_ptr(tinfo)
     return tinfo
 
+
 # local type by name
 def get_local_type(name: str) -> idaapi.tinfo_t:
     tinfo = idaapi.tinfo_t()
     tinfo.get_named_type(idaapi.get_idati(), name)
     return tinfo
+
 
 # tinfo to struc, by name correspondance
 def struc_from_tinfo(tinfo: idaapi.tinfo_t) -> idaapi.struc_t:
@@ -274,7 +302,7 @@ def struc_from_tinfo(tinfo: idaapi.tinfo_t) -> idaapi.struc_t:
     return idaapi.get_struc(sid)
 
 
-''' Function utilities '''
+""" Function utilities """
 
 # creates funcarg_t type
 def make_function_argument(typ: idaapi.tinfo_t, name: str = "") -> idaapi.funcarg_t:
@@ -282,6 +310,7 @@ def make_function_argument(typ: idaapi.tinfo_t, name: str = "") -> idaapi.funcar
     farg.type = typ
     farg.name = name
     return farg
+
 
 # shift pointer
 def shift_ptr(ptr: idaapi.tinfo_t, parent: idaapi.tinfo_t, shift: int):
@@ -295,8 +324,16 @@ def shift_ptr(ptr: idaapi.tinfo_t, parent: idaapi.tinfo_t, shift: int):
         ptr_data.parent = parent
         ptr.create_ptr(ptr_data, idaapi.BT_PTR)
 
+
 # add argument to function + shift ptr argument
-def set_function_argument(func_data: idaapi.func_type_data_t, index: int, typ: idaapi.tinfo_t, shift: int = 0, parent: idaapi.tinfo_t = None, name = None):
+def set_function_argument(
+    func_data: idaapi.func_type_data_t,
+    index: int,
+    typ: idaapi.tinfo_t,
+    shift: int = 0,
+    parent: idaapi.tinfo_t = None,
+    name=None,
+):
     while index > func_data.size():
         func_data.grow(make_function_argument(void_ptr(), f"arg_{func_data.size()}"))
 
@@ -312,6 +349,7 @@ def set_function_argument(func_data: idaapi.func_type_data_t, index: int, typ: i
     else:
         func_data[index] = arg
 
+
 # creates a new valid func_type_data_t object
 def new_func_data(cc: int = idaapi.CM_CC_UNKNOWN) -> idaapi.func_type_data_t:
     func_data = idaapi.func_type_data_t()
@@ -325,6 +363,7 @@ def new_func_data(cc: int = idaapi.CM_CC_UNKNOWN) -> idaapi.func_type_data_t:
     func_data.cc = cc
 
     return func_data
+
 
 # get basic block containing ea
 def get_bb(ea: int) -> idaapi.range_t:

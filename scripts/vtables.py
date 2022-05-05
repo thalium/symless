@@ -1,18 +1,19 @@
-import idaapi
-
 import collections
 import inspect
 import os
 import sys
 
+import idaapi
+
 # add symless dir to search path
-symless_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(inspect.getsourcefile(lambda: 0))), ".."))
+symless_dir = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(inspect.getsourcefile(lambda: 0))), "..")
+)
 sys.path.append(symless_dir)
 
 import symless.ida_utils as ida_utils
 
-
-''' Scans binary for vtables '''
+""" Scans binary for vtables """
 
 if __name__ == "__main__":
     stats = [0, 0]

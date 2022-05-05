@@ -1,11 +1,11 @@
-import idaapi
-
 import re
 
+import idaapi
+
 import symless.conflict as conflict
+import symless.cpustate.arch as arch
 import symless.ida_utils as ida_utils
 import symless.model as model
-import symless.cpustate.arch as arch
 
 re_struc_name_invalids = re.compile(r"[\s\*&]")
 
@@ -132,15 +132,16 @@ def recover_names_from_ctors(ctx: model.context_t, names: set) -> set:
             continue
 
         objname = struc_name_cleanup(objname)
-        if objname not in names: # or else we got a ctor wrong
+        if objname not in names:  # or else we got a ctor wrong
             model.set_name(objname)
             names.add(objname)
 
     return names
 
+
 # use vtables labels to name structures
 def recover_names_from_vtables(ctx: model.context_t) -> set:
-    names_cflt = dict() # name -> set of models
+    names_cflt = dict()  # name -> set of models
 
     # Get name for each struct
     for model in ctx.get_models():

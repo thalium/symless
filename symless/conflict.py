@@ -1,15 +1,14 @@
-import idaapi
-
 import bisect
 import collections
 import math
 
+import idaapi
+
+import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
 import symless.model as model
-import symless.cpustate.cpustate as cpustate
 
-
-''' Within model conflicts resolution '''
+""" Within model conflicts resolution """
 
 # between multiple structs containing a ptr to vtable,
 # which one to use to type virtual functions
@@ -20,7 +19,7 @@ def select_vtable_owner(vtable: model.model_t):
         vtable.owners = None
 
 
-''' Between models conflicts resolution '''
+""" Between models conflicts resolution """
 
 # boundaries of a conflicting area
 class boundary_t:
@@ -48,8 +47,8 @@ class boundary_t:
 
 # record of conflicting models
 class belligerents_t:
-    def __init__(self, candidates, vtable_conflict = False):
-        self.key = tuple(candidates) # tuple of (sid, offset)
+    def __init__(self, candidates, vtable_conflict=False):
+        self.key = tuple(candidates)  # tuple of (sid, offset)
         self.vtable_conflict = vtable_conflict
 
     def is_valid(self) -> bool:
@@ -57,7 +56,7 @@ class belligerents_t:
 
     def get_subjects(self):
         for k in self.key:
-            yield k # (sid, offset)
+            yield k  # (sid, offset)
 
     def dump(self, ctx: model.context_t):
         for sid, offset in self.get_subjects():
@@ -77,7 +76,7 @@ class belligerents_t:
 # records all conflicts
 class conflicts_t:
     def __init__(self):
-        self.conflicts = dict() # belligerents_t -> boundary_t
+        self.conflicts = dict()  # belligerents_t -> boundary_t
 
     # build conflict key from all contestants
     def get_key(self, ea: int, n: int, candidates: set, ctx: model.context_t) -> belligerents_t:
@@ -108,12 +107,14 @@ class conflicts_t:
     def dump(self, ctx: model.context_t):
         for b in self.get_all_conficts():
             bound = self.get_conflicting_area(b)
-            print("Conflict on area [%x, %x] (size: %x):" % (bound.lower, bound.upper, bound.size()))
+            print(
+                "Conflict on area [%x, %x] (size: %x):" % (bound.lower, bound.upper, bound.size())
+            )
             b.dump(ctx)
             print()
 
 
-''' Similar models merging '''
+""" Similar models merging """
 
 # between two models, which one to keep and which one to merge
 def who_to_merge(m1: model.model_t, m2: model.model_t):
@@ -138,7 +139,7 @@ def get_similar_models(ctx: model.context_t, bound: boundary_t, subject, others)
     out = [subject]
     model = ctx.models[subject[0]]
 
-    if model.is_vtable(): # vtables are not duplicated
+    if model.is_vtable():  # vtables are not duplicated
         return out
 
     for other in others:
@@ -149,7 +150,9 @@ def get_similar_models(ctx: model.context_t, bound: boundary_t, subject, others)
             if model.is_varsize_struct() and not boundary_emcompass_model(model, subject[1], bound):
                 continue
 
-            if m_other.is_varsize_struct() and not boundary_emcompass_model(m_other, other[1], bound):
+            if m_other.is_varsize_struct() and not boundary_emcompass_model(
+                m_other, other[1], bound
+            ):
                 continue
 
             bisect.insort_left(out, other)
@@ -161,7 +164,7 @@ def get_similar_models(ctx: model.context_t, bound: boundary_t, subject, others)
 def remove_duplicates(ctx: model.context_t, conflicts: conflicts_t):
     dupes = collections.deque()
 
-    # identifiy duplicates    
+    # identifiy duplicates
     for bell in conflicts.get_all_conficts():
         bound = conflicts.get_conflicting_area(bell)
         keys = set(bell.key)
@@ -193,15 +196,15 @@ def remove_duplicates(ctx: model.context_t, conflicts: conflicts_t):
             keep.merge_full(m, ctx)
 
 
-''' Operands conflicts mitigation '''
+""" Operands conflicts mitigation """
 
 # get candidates common type
 def get_common_type(candidates: list) -> model.model_type:
     ret = model.model_type.UNVALID
     for m, _ in candidates:
-        if m.is_vtable(): # vtable
+        if m.is_vtable():  # vtable
             current = model.model_type.VTABLE
-        else: # struct
+        else:  # struct
             current = model.model_type.STRUCTURE
 
         if ret != model.model_type.UNVALID and current != ret:
@@ -223,7 +226,16 @@ def find_less_derived(candidates: list, conflict_ea: int = 0):
 
     conflict_vtables = [i[0].get_name() for i in filter(lambda k: k[0].is_vtable(), candidates)]
     conflict_structs = [i[0].get_name() for i in filter(lambda k: not k[0].is_vtable(), candidates)]
-    print("Warning: conflict on 0x%x involves %d structures & %d vtables, %s <-> %s" % (conflict_ea, len(conflict_structs), len(conflict_vtables), str(conflict_structs[:4]), str(conflict_vtables[:4])))
+    print(
+        "Warning: conflict on 0x%x involves %d structures & %d vtables, %s <-> %s"
+        % (
+            conflict_ea,
+            len(conflict_structs),
+            len(conflict_vtables),
+            str(conflict_structs[:4]),
+            str(conflict_vtables[:4]),
+        )
+    )
 
     # choose between structs by default
     return find_less_derived_class([i for i in filter(lambda k: not k[0].is_vtable(), candidates)])
@@ -231,23 +243,23 @@ def find_less_derived(candidates: list, conflict_ea: int = 0):
 
 # between multiple candidates with a common base, find the one the closest from that common base
 def find_less_derived_class(candidates: list):
-    #1: between the less shifted
+    # 1: between the less shifted
     candidates.sort(key=lambda k: k[1])
     shift = candidates[0][1]
     selected = [i[0] for i in filter(lambda k: k[1] == shift, candidates)]
 
-    #2 sort by size
+    # 2 sort by size
     selected.sort(key=lambda k: (k.size, k.sid))
 
-    #3: distinguish known size from unkown size
+    # 3: distinguish known size from unkown size
     known = [i for i in filter(lambda k: k.is_struct(), selected)]
     unknown = [i for i in filter(lambda k: k.is_varsize_struct(), selected)]
 
     if len(unknown) == 0:
         return (known[0], shift)
 
-    #4: unknown size structs in candidates, base choice on vtables
-    if len(known) > 0 and 0 in known[0].vtables: # prefer struct with vtable
+    # 4: unknown size structs in candidates, base choice on vtables
+    if len(known) > 0 and 0 in known[0].vtables:  # prefer struct with vtable
         i = 0
         selected = known[0]
     else:
@@ -284,7 +296,9 @@ def find_less_derived_vtable(candidates: list):
 def select_operands_target(ctx: model.context_t):
     for (ea, n), (_, conflicts) in ctx.all_operands.items():
         if len(conflicts) > 1:
-            candidates = [(ctx.models[sid], ctx.models[sid].get_shift_for_operand(ea, n)) for sid in conflicts]
+            candidates = [
+                (ctx.models[sid], ctx.models[sid].get_shift_for_operand(ea, n)) for sid in conflicts
+            ]
             selected = find_less_derived(candidates, ea)[0]
 
             dq = collections.deque()
@@ -299,14 +313,18 @@ def select_operands_target(ctx: model.context_t):
                 conflicts.remove(dq.pop())
 
 
-''' Function arguments type conflicts '''
+""" Function arguments type conflicts """
 
 # choose arg type between candidates
-def select_argument_type(func: model.function_t, ctx: model.context_t, candidates: set, can_shift: bool = False):
+def select_argument_type(
+    func: model.function_t, ctx: model.context_t, candidates: set, can_shift: bool = False
+):
     if len(candidates) == 0:
         return None
 
-    model, shift = find_less_derived([(ctx.models[sid], shift) for sid, shift in candidates], func.ea)
+    model, shift = find_less_derived(
+        [(ctx.models[sid], shift) for sid, shift in candidates], func.ea
+    )
 
     # do not apply shifted arg everywhere
     # avoid setting type fct(& A->int) for function fct(int* ptr)
@@ -345,11 +363,11 @@ def validate_function_arguments(fct: model.function_t):
     # heuristic 1: if function is not widely used, type it with anything we have
     # genral functions that take primitive types have more references
     calls_count = len(ida_utils.get_references(fct.ea))
-    if calls_count <= 3: # arbitrary 3, to twist
+    if calls_count <= 3:  # arbitrary 3, to twist
         return
 
     # propagate arguments in function
-    params = cpustate.propagation_param_t(depth = 2)
+    params = cpustate.propagation_param_t(depth=2)
     ida_fct = idaapi.get_func(fct.ea)
     if ida_fct is None:
         fct.discard_all_args()
@@ -361,7 +379,7 @@ def validate_function_arguments(fct: model.function_t):
     # discard arguments that were not used
     for subject in ctx.get_models():
         index = subject.sid
-        if fct.is_virtual and index == 0: # we are sure about those
+        if fct.is_virtual and index == 0:  # we are sure about those
             continue
 
         original, _ = fct.args[index]
@@ -379,7 +397,9 @@ def select_functions_arguments(ctx: model.context_t):
         function.purge(ctx)
 
         for i in range(function.args_count):
-            function.args[i] = select_argument_type(function, ctx, function.args[i], function.is_virtual and i == 0)
+            function.args[i] = select_argument_type(
+                function, ctx, function.args[i], function.is_virtual and i == 0
+            )
 
         function.ret = select_argument_type(function, ctx, function.ret)
 
@@ -387,7 +407,7 @@ def select_functions_arguments(ctx: model.context_t):
         validate_function_arguments(function)
 
 
-''' Solve all conflicts '''
+""" Solve all conflicts """
 
 # Use conflict data to merge duplicated structures
 def resolve_state_conflicts(ctx: model.context_t):
@@ -425,13 +445,19 @@ def solve_conflicts(ctx: model.context_t, verbose: bool = True):
     resolve_state_conflicts(ctx)
 
     if verbose:
-        print("Info: conflicts count after model refactoring: %d" % get_unresolved_conflicts_count(ctx))
+        print(
+            "Info: conflicts count after model refactoring: %d"
+            % get_unresolved_conflicts_count(ctx)
+        )
 
     # select target for conflicting operands
     select_operands_target(ctx)
 
     if verbose:
-        print("Info: conflicts count after operands assignment: %d" % get_unresolved_conflicts_count(ctx))
+        print(
+            "Info: conflicts count after operands assignment: %d"
+            % get_unresolved_conflicts_count(ctx)
+        )
 
     # find arguments to apply to retrieved functions
     select_functions_arguments(ctx)

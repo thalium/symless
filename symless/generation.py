@@ -1,11 +1,11 @@
 import idaapi
 import idc
 
+import symless.cpustate.cpustate as cpustate
 import symless.existing as existing
 import symless.ida_utils as ida_utils
 import symless.model as model
 import symless.symbols as symbols
-import symless.cpustate.cpustate as cpustate
 
 
 # Apply struc type on operand
@@ -18,7 +18,7 @@ def set_operand_type(ea: int, n: int, sid: int, shift: int):
 # get flags giving the right type for given struct member size
 def get_data_flags(size: int):
     flags = idaapi.FF_DATA
-    if size < 32: # avoid ymmword type, raises warnings
+    if size < 32:  # avoid ymmword type, raises warnings
         flags |= idaapi.get_flags_by_size(size)
     return flags
 
@@ -32,7 +32,9 @@ def padd_struc(struc: idaapi.struc_t, size: int):
         if idc.get_member_id(struc.id, next) != -1:
             if next - current > 0:
                 msize = next - current
-                idaapi.add_struc_member(struc, f"padd__{current:08x}", current, get_data_flags(msize), None, msize)
+                idaapi.add_struc_member(
+                    struc, f"padd__{current:08x}", current, get_data_flags(msize), None, msize
+                )
             next = idc.get_next_offset(struc.id, next)
             current = next
         else:
@@ -40,7 +42,9 @@ def padd_struc(struc: idaapi.struc_t, size: int):
 
     if struc_size < size:
         msize = size - struc_size
-        idaapi.add_struc_member(struc, f"padd__{struc_size:08x}", struc_size, get_data_flags(msize), None, msize)
+        idaapi.add_struc_member(
+            struc, f"padd__{struc_size:08x}", struc_size, get_data_flags(msize), None, msize
+        )
 
 
 def get_model_tinfo(m: model.model_t) -> idaapi.tinfo_t:
@@ -56,9 +60,9 @@ def get_model_ptr_tinfo(m: model.model_t) -> idaapi.tinfo_t:
 # Generate a new struc implementing given model
 def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
     sid = idaapi.get_struc_id(model.get_name())
-    
+
     if sid == idaapi.BADADDR:
-        model.set_name(None) # struct was not added because of bad name
+        model.set_name(None)  # struct was not added because of bad name
         sid = idaapi.add_struc(idaapi.BADADDR, model.get_name(), False)
 
     struc = idaapi.get_struc(sid)
@@ -68,7 +72,9 @@ def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
 
     # add members
     for (offset, size) in model.members:
-        idaapi.add_struc_member(struc, f"field_{offset:08x}", offset, get_data_flags(size), None, size)
+        idaapi.add_struc_member(
+            struc, f"field_{offset:08x}", offset, get_data_flags(size), None, size
+        )
 
     # set struct comment
     if not has_struc_comment(sid):
@@ -106,7 +112,11 @@ def set_struc_comment(model: model.model_t, sid: int):
         idaapi.set_struc_cmt(sid, "Allocated at: %s" % ", ".join(map(hex, model.ea)), False)
     elif model.is_varsize_struct():
         if len(model.ea) > 0:
-            idaapi.set_struc_cmt(sid, "Not directly allocated, ctors/dtors: %s" % ", ".join(map(hex, model.ea)), False)
+            idaapi.set_struc_cmt(
+                sid,
+                "Not directly allocated, ctors/dtors: %s" % ", ".join(map(hex, model.ea)),
+                False,
+            )
     elif model.owners is not None:
         idaapi.set_struc_cmt(sid, "Vtable of %s" % (model.owners[0].get_name()), False)
 
@@ -116,7 +126,7 @@ def has_struc_comment(sid: int) -> bool:
 
 
 # set type & name of struc vtable ptrs
-def type_vtable_ptrs(model: model.model_t, struc: idaapi.struc_t, ctx: model.context_t):  
+def type_vtable_ptrs(model: model.model_t, struc: idaapi.struc_t, ctx: model.context_t):
     first = True
     for (offset, vtable_sid) in model.get_vtables():
         member = idaapi.get_member(struc, offset)
@@ -140,7 +150,7 @@ def type_vtable_ptrs(model: model.model_t, struc: idaapi.struc_t, ctx: model.con
 # mark vtable ptrs of given model with TAFLD_VFTABLE flag
 # removes vtable indirection on virtual method call, but move the struct to the local types
 def mark_vtable_ptrs(model: model.model_t):
-    if len(model.vtables) <= 1: # not necessary when only 1 vtable
+    if len(model.vtables) <= 1:  # not necessary when only 1 vtable
         return
 
     tinfo = get_model_tinfo(model)
@@ -180,11 +190,13 @@ def populate_vtable(vtable: model.model_t, struc: idaapi.struc_t):
 
         # type
         func_tinfo, func_data = get_or_create_fct_type(fea, idaapi.CM_CC_INVALID)
-        func_data.cc = cpustate.get_abi().get_object_cc().cc # force object cc
+        func_data.cc = cpustate.get_abi().get_object_cc().cc  # force object cc
 
         if vtable.owners is not None:
             owner, offset = vtable.owners
-            ida_utils.set_function_argument(func_data, 0, get_model_ptr_tinfo(owner), offset, get_model_tinfo(owner))
+            ida_utils.set_function_argument(
+                func_data, 0, get_model_ptr_tinfo(owner), offset, get_model_tinfo(owner)
+            )
 
         func_tinfo.create_func(func_data)
         func_tinfo.create_ptr(func_tinfo)
@@ -224,7 +236,9 @@ def get_or_create_fct_type(fea: int, default_cc: int) -> (idaapi.tinfo_t, idaapi
         try:
             import ida_hexrays
 
-            cfunc = ida_hexrays.decompile_func(idaapi.get_func(fea), ida_hexrays.hexrays_failure_t(), 0)
+            cfunc = ida_hexrays.decompile_func(
+                idaapi.get_func(fea), ida_hexrays.hexrays_failure_t(), 0
+            )
             if cfunc.__deref__() is not None and cfunc.get_func_type(func_tinfo):
                 func_tinfo.get_func_details(func_data)
                 return (func_tinfo, func_data)
@@ -259,10 +273,16 @@ def set_functions_type(functions: dict, force: bool = True):
         for (index, model, shift) in function.get_args():
 
             # check that we can replace existing arg
-            if not force and index < func_data.size() and not existing.can_type_be_replaced(func_data[index].type):
+            if (
+                not force
+                and index < func_data.size()
+                and not existing.can_type_be_replaced(func_data[index].type)
+            ):
                 continue
 
-            ida_utils.set_function_argument(func_data, index, get_model_ptr_tinfo(model), shift, get_model_tinfo(model))
+            ida_utils.set_function_argument(
+                func_data, index, get_model_ptr_tinfo(model), shift, get_model_tinfo(model)
+            )
 
         if func_tinfo.create_func(func_data):
             idaapi.apply_tinfo(function.ea, func_tinfo, idaapi.TINFO_DEFINITE)
@@ -271,7 +291,10 @@ def set_functions_type(functions: dict, force: bool = True):
 # Generate structures from model
 def generate_structs(ctx: model.context_t) -> int:
 
-    print("Info: generating %d structures.." % sum([(0 if i.is_empty() else 1) for i in ctx.get_models()]))
+    print(
+        "Info: generating %d structures.."
+        % sum([(0 if i.is_empty() else 1) for i in ctx.get_models()])
+    )
 
     # generate empty strucs to be used as types
     for model in ctx.get_models():

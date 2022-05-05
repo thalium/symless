@@ -4,21 +4,23 @@ import re
 
 import idaapi
 
-import symless.ida_utils as ida_utils
 import symless.cpustate.cpustate as cpustate
+import symless.ida_utils as ida_utils
 
 # do not consider alloc bigger than this to be object allocs
-g_max_alloc = 0xffffff
+g_max_alloc = 0xFFFFFF
+
 
 def valid_size(size: int):
     return size > 0 and size <= g_max_alloc
 
 
-class alloc_action_t(enum.Enum): # allocator action
-    STATIC_ALLOCATION = 0 # malloc(n)
-    WRAPPED_ALLOCATOR = 1 # func(x) -> return malloc(x)
-    JUMP_TO_ALLOCATOR = 2 # func(x) -> jump malloc
+class alloc_action_t(enum.Enum):  # allocator action
+    STATIC_ALLOCATION = 0  # malloc(n)
+    WRAPPED_ALLOCATOR = 1  # func(x) -> return malloc(x)
+    JUMP_TO_ALLOCATOR = 2  # func(x) -> jump malloc
     UNDEFINED = 3
+
 
 # a heap allocation function
 class allocator_t:
@@ -41,7 +43,7 @@ class allocator_t:
         return f"{self.type}_like_{self.index:x}"
 
     def get_child(self, ea: int, args: tuple):
-        child = self.__class__.__new__(self.__class__) # is there a nicer way to do this ?
+        child = self.__class__.__new__(self.__class__)  # is there a nicer way to do this ?
         child.__init__(ea, *args)
         return child
 
@@ -78,10 +80,12 @@ class malloc_like_t(allocator_t):
         self.size_index = size_index
 
     def on_call(self, state: cpustate.state_t) -> (alloc_action_t, int):
-        is_jump = (state.call_type == cpustate.call_type_t.JUMP)
+        is_jump = state.call_type == cpustate.call_type_t.JUMP
 
         # size parameter
-        arg = cpustate.get_argument(cpustate.get_default_cc(), state, self.size_index, False, is_jump)
+        arg = cpustate.get_argument(
+            cpustate.get_default_cc(), state, self.size_index, False, is_jump
+        )
 
         # size argument comes from wrapper arguments, wrapper might be an allocator
         if isinstance(arg, cpustate.arg_t):
@@ -105,7 +109,7 @@ class malloc_like_t(allocator_t):
         if tinfo.get_decltype() == idaapi.BT_UNK:
             tinfo = ida_utils.get_basic_type(idaapi.BT_INT)
 
-        ida_utils.set_function_argument(func_data, self.size_index, tinfo, name = "size")
+        ida_utils.set_function_argument(func_data, self.size_index, tinfo, name="size")
 
 
 # calloc like allocator, takes two parameters: count & unit size
@@ -116,10 +120,14 @@ class calloc_like_t(allocator_t):
         self.size_index = size_index
 
     def on_call(self, state: cpustate.state_t) -> (alloc_action_t, int):
-        is_jump = (state.call_type == cpustate.call_type_t.JUMP)
+        is_jump = state.call_type == cpustate.call_type_t.JUMP
 
-        count_arg = cpustate.get_argument(cpustate.get_default_cc(), state, self.count_index, False, is_jump)
-        size_arg = cpustate.get_argument(cpustate.get_default_cc(), state, self.size_index, False, is_jump)
+        count_arg = cpustate.get_argument(
+            cpustate.get_default_cc(), state, self.count_index, False, is_jump
+        )
+        size_arg = cpustate.get_argument(
+            cpustate.get_default_cc(), state, self.size_index, False, is_jump
+        )
 
         if isinstance(count_arg, cpustate.arg_t) and isinstance(size_arg, cpustate.arg_t):
             count_index = count_arg.idx
@@ -130,7 +138,12 @@ class calloc_like_t(allocator_t):
 
             return (alloc_action_t.WRAPPED_ALLOCATOR, (count_index, size_index))
 
-        if isinstance(count_arg, cpustate.int_t) and valid_size(count_arg.get_val()) and isinstance(size_arg, cpustate.int_t) and valid_size(size_arg.get_val()):
+        if (
+            isinstance(count_arg, cpustate.int_t)
+            and valid_size(count_arg.get_val())
+            and isinstance(size_arg, cpustate.int_t)
+            and valid_size(size_arg.get_val())
+        ):
             size = count_arg.get_val() * size_arg.get_val()
             return (alloc_action_t.STATIC_ALLOCATION, size)
 
@@ -143,8 +156,8 @@ class calloc_like_t(allocator_t):
         if tinfo.get_decltype() == idaapi.BT_UNK:
             tinfo = ida_utils.get_basic_type(idaapi.BT_INT)
 
-        ida_utils.set_function_argument(func_data, self.count_index, tinfo, name = "nmemb")
-        ida_utils.set_function_argument(func_data, self.size_index, tinfo, name = "size")
+        ida_utils.set_function_argument(func_data, self.count_index, tinfo, name="nmemb")
+        ida_utils.set_function_argument(func_data, self.size_index, tinfo, name="size")
 
 
 # realloc is just a malloc with the size parameter at index 1
@@ -154,11 +167,7 @@ class realloc_t(malloc_like_t):
         self.size_index = size_index
 
 
-available_allocators = {
-    "malloc" : malloc_like_t,
-    "calloc" : calloc_like_t,
-    "realloc": realloc_t
-}
+available_allocators = {"malloc": malloc_like_t, "calloc": calloc_like_t, "realloc": realloc_t}
 
 
 # parse calloc(0, 1) into (calloc_like_t, [0,1])
@@ -175,7 +184,7 @@ def parse_allocator(declaration: str) -> (allocator_t, list):
 
     args = list()
     if match.group(2) is not None:
-        for index in match.group(2).split('|'):
+        for index in match.group(2).split("|"):
 
             if len(index) == 0:
                 continue
@@ -204,7 +213,7 @@ def get_entry_points(config_path: str):
     while current:
         current = current.strip().split("#")[0]
 
-        if len(current) == 0 or current[0] == '#':
+        if len(current) == 0 or current[0] == "#":
             pass
         else:
             keys = current.split(",")
@@ -215,7 +224,10 @@ def get_entry_points(config_path: str):
 
             import_type, args = parse_allocator(keys[-1].strip())
             if import_type is None:
-                print("Error: %s bad syntax for allocator type \"%s\" at line %d" % (config_path, keys[-1].strip(), i))
+                print(
+                    'Error: %s bad syntax for allocator type "%s" at line %d'
+                    % (config_path, keys[-1].strip(), i)
+                )
                 return None
 
             # entry point from lib import
@@ -232,12 +244,18 @@ def get_entry_points(config_path: str):
                 else:
                     ea = ida_utils.get_import_from_module(module, import_name)
                     if ea is None:
-                        print("Warning: import %s from module %s absent from binary" % (import_name, module_name))
+                        print(
+                            "Warning: import %s from module %s absent from binary"
+                            % (import_name, module_name)
+                        )
                     else:
-                        print("Info: retrieved entry point %s from module %s" % (import_name, module_name))
+                        print(
+                            "Info: retrieved entry point %s from module %s"
+                            % (import_name, module_name)
+                        )
 
                         imports.append(import_type(ea, *args))
-            
+
             # entry point as function from binary
             elif length == 2:
 
@@ -250,9 +268,9 @@ def get_entry_points(config_path: str):
 
                 func = idaapi.get_func(func_ea)
                 if func is None or func.start_ea != func_ea:
-                    print("Error: unable to located entry point \"%s\"" % func_name)
+                    print('Error: unable to located entry point "%s"' % func_name)
                 else:
-                    print("Info: retrieved entry point \"%s\"" % func_name)
+                    print('Info: retrieved entry point "%s"' % func_name)
 
                     imports.append(import_type(func.start_ea, *args))
 

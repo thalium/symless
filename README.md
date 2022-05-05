@@ -35,7 +35,7 @@ Both stripped and non-stripped binaries are supported. Symbols are only used to 
 * Windows i386 (```__stdcall``` & ```__thiscall```)
 * System V x64 (```__fastcall```)
 * System V i386 (```__stdcall```)
- 
+
 **IDA Pro 7.6** or newer &  **python 3**
 
 ## Approach

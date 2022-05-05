@@ -46,11 +46,11 @@ def find_idat() -> (str, str):
     ida64 = os.path.join(ida_dir, "idat64" + suffix)
 
     if not os.path.isfile(ida32):
-        stderr_print("Missing idat%s in \"%s\"" % (suffix, ida_dir))
+        stderr_print('Missing idat%s in "%s"' % (suffix, ida_dir))
         return None
-        
+
     if not os.path.isfile(ida64):
-        stderr_print("Missing idat64%s in \"%s\"" % (suffix, ida_dir))
+        stderr_print('Missing idat64%s in "%s"' % (suffix, ida_dir))
         return None
 
     return (ida32, ida64)
@@ -64,7 +64,7 @@ def craft_ida_command(idat: str, idb: str, script: str, script_args: [str]) -> (
     if len(script_args) == 0:
         quoted_args = ""
     else:
-        quoted_args = " \\\"" + "\\\" \\\"".join(script_args) + "\\\""
+        quoted_args = ' \\"' + '\\" \\"'.join(script_args) + '\\"'
 
     cmd = f'"{idat}" -A -L"{log_file}" -S"\\"{script}\\"{quoted_args}" "{idb}"'
 
@@ -74,7 +74,7 @@ def craft_ida_command(idat: str, idb: str, script: str, script_args: [str]) -> (
 # run ida -B filepath
 def run_ida_batchmode(idat: str, filepath: str) -> int:
     args = f'"{idat}" -B "{filepath}"'
-    process = subprocess.Popen(args, shell = (platform.system() != "Windows"))
+    process = subprocess.Popen(args, shell=(platform.system() != "Windows"))
 
     code = process.wait()
     if code != 0:
@@ -131,11 +131,14 @@ def run_ida(ida_install: tuple, input_file: str, script: str, script_args: [str]
 
     print("Running IDA script..")
     print("* IDAT  : %s" % idat)
-    print("* Script: %s%s" % (script, "" if len(script_args) == 0 else " (\"%s\")" % "\", \"".join(script_args)))
+    print(
+        "* Script: %s%s"
+        % (script, "" if len(script_args) == 0 else ' ("%s")' % '", "'.join(script_args))
+    )
     print("* Base  : %s" % idb_file)
     print("* Logs  : %s" % log_file)
 
-    process = subprocess.Popen(cmd, shell = (platform.system() != "Windows"))
+    process = subprocess.Popen(cmd, shell=(platform.system() != "Windows"))
     code = process.wait()
 
     try:
@@ -154,7 +157,7 @@ def run_ida(ida_install: tuple, input_file: str, script: str, script_args: [str]
             if not line.startswith(prefix):
                 continue
 
-            print(line.strip()[len(prefix):])
+            print(line.strip()[len(prefix) :])
     else:
         stderr_print("Trace:")
         stderr_print(output.read())
@@ -171,7 +174,7 @@ def run_script(script: str, input_file: str, args: [str] = None) -> int:
         return 1
 
     if args is None:
-        args = [] # new args array, do not used the same default one between multiple calls
+        args = []  # new args array, do not used the same default one between multiple calls
 
     return int(not run_ida(ida_install, input_file, script, args))
 

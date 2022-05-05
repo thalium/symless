@@ -10,15 +10,15 @@ repos:
 -   repo: https://github.com/pre-commit/mirrors-isort
     rev: v5.10.1
     hooks:
-    -   id: isort   
+    -   id: isort
 
-# black 
+# black
 -   repo: https://github.com/psf/black
     rev: 22.3.0
     hooks:
     - id: black
       args: # arguments to configure black
-        - --line-length=88   
+        - --line-length=100
 
 # # flake8
 # -   repo: https://github.com/pre-commit/pre-commit-hooks

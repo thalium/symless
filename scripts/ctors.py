@@ -1,13 +1,15 @@
-import idaapi
-
 import collections
 import inspect
 import os
 import re
 import sys
 
+import idaapi
+
 # add symless dir to search path
-symless_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(inspect.getsourcefile(lambda: 0))), ".."))
+symless_dir = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(inspect.getsourcefile(lambda: 0))), "..")
+)
 sys.path.append(symless_dir)
 
 import symless.ida_utils as ida_utils
@@ -16,7 +18,7 @@ import symless.model as model
 re_ctors = re.compile(r"\b((?:[\w_]+::)*)([\S ]+)::(~?)\2(?:\(|$)")
 
 
-''' Find ctors/dtors in binary '''
+""" Find ctors/dtors in binary """
 
 if __name__ == "__main__":
 

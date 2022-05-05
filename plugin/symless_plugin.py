@@ -1,6 +1,6 @@
-import idaapi
-
 import os
+
+import idaapi
 
 from symless import conflict, existing, generation, ida_utils, model, symbols
 from symless.cpustate import arch, cpustate
@@ -15,7 +15,7 @@ class BuildHandler(idaapi.action_handler_t):
             return 0
 
         # consider first operand to be the dst operand
-        dst_op = (op.n == 0)
+        dst_op = op.n == 0
 
         # arch supported
         if not arch.is_arch_supported():
@@ -32,7 +32,7 @@ class BuildHandler(idaapi.action_handler_t):
         form = SelectionForm()
         form.Compile()
         if form.Execute() <= 0:
-            return 0 # cancel hit
+            return 0  # cancel hit
 
         struc = form.get_struc()
         shift = form.get_shift()
@@ -82,7 +82,15 @@ class PopUpHook(idaapi.UI_Hooks):
         icon_path = os.path.join(RESOURCES_PATH, "propag.png")
         self.icon = idaapi.load_custom_icon(icon_path)
 
-        self.action = idaapi.action_desc_t("Symless:Live", "Propagate structure", BuildHandler(), "Shift+t", "Automatic t-t-t", self.icon, idaapi.ADF_OWN_HANDLER)
+        self.action = idaapi.action_desc_t(
+            "Symless:Live",
+            "Propagate structure",
+            BuildHandler(),
+            "Shift+t",
+            "Automatic t-t-t",
+            self.icon,
+            idaapi.ADF_OWN_HANDLER,
+        )
         idaapi.register_action(self.action)
 
     def term(self):
@@ -92,7 +100,11 @@ class PopUpHook(idaapi.UI_Hooks):
     # right click menu popup
     def finish_populating_widget_popup(self, widget, popup, ctx):
         # disassembly window + no selection + point at a register
-        if idaapi.get_widget_type(widget) == idaapi.BWN_DISASM and (ctx.cur_flags & idaapi.ACF_HAS_SELECTION) == 0 and current_op_reg() >= 0:
+        if (
+            idaapi.get_widget_type(widget) == idaapi.BWN_DISASM
+            and (ctx.cur_flags & idaapi.ACF_HAS_SELECTION) == 0
+            and current_op_reg() >= 0
+        ):
             idaapi.attach_action_to_popup(widget, popup, self.action.name)
 
 
@@ -101,7 +113,9 @@ class StructureChooser(idaapi.Choose):
     last_selection = None
 
     def __init__(self):
-        idaapi.Choose.__init__(self, "", [["Structure", 10 | idaapi.CHCOL_PLAIN]], embedded = True, width = 10, height = 6)
+        idaapi.Choose.__init__(
+            self, "", [["Structure", 10 | idaapi.CHCOL_PLAIN]], embedded=True, width=10, height=6
+        )
 
     def OnGetLine(self, n):
         return [idaapi.get_struc_name(idaapi.get_struc_by_idx(n))]
@@ -124,10 +138,10 @@ Structure propagation
 """
 
         parameters = {
-            "structChooser"     : idaapi.Form.EmbeddedChooserControl(StructureChooser()),
-            "shiftChooser"      : idaapi.Form.NumericInput(tp = idaapi.Form.FT_DEC, value = 0),
-            "checkGroup"        : idaapi.Form.ChkGroupControl(("depthChooser",), value = 1),
-            "changeHandler"     : idaapi.Form.FormChangeCb(self.on_change)
+            "structChooser": idaapi.Form.EmbeddedChooserControl(StructureChooser()),
+            "shiftChooser": idaapi.Form.NumericInput(tp=idaapi.Form.FT_DEC, value=0),
+            "checkGroup": idaapi.Form.ChkGroupControl(("depthChooser",), value=1),
+            "changeHandler": idaapi.Form.FormChangeCb(self.on_change),
         }
 
         # init form
@@ -172,7 +186,7 @@ class SymlessPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_MOD | idaapi.PLUGIN_PROC
     comment = "Structure information propagation & building"
     help = "Propagate one struct information through assembly code"
-    wanted_name="Symless"
+    wanted_name = "Symless"
     wanted_hotkey = ""
 
     def init(self):
@@ -186,6 +200,7 @@ class SymlessPlugin(idaapi.plugin_t):
     def term(self):
         self.uihook.term()
         self.uihook.unhook()
+
 
 def PLUGIN_ENTRY():
     return SymlessPlugin()
@@ -227,11 +242,15 @@ def injector(state: cpustate.state_t, ea: int, target_ea: int, target: str, valu
 
 
 # propagate and build one struct
-def propagate_struct(struc: idaapi.struc_t, start_ea: int, target_reg: str, shift: int, dive: bool, on_dst_op: bool) -> model.context_t:
+def propagate_struct(
+    struc: idaapi.struc_t, start_ea: int, target_reg: str, shift: int, dive: bool, on_dst_op: bool
+) -> model.context_t:
     struc_model, context = existing.from_structure(struc)
 
     # inject after update if on dst operand, before update if on src operand
-    inject_cb = lambda state, ea: injector(state, ea, start_ea, target_reg, cpustate.sid_t(struc_model.sid, shift))
+    inject_cb = lambda state, ea: injector(
+        state, ea, start_ea, target_reg, cpustate.sid_t(struc_model.sid, shift)
+    )
     inject = cpustate.injector_t(inject_cb, not on_dst_op)
 
     params = cpustate.propagation_param_t(inject, cpustate.MAX_PROPAGATION_RECURSION if dive else 0)

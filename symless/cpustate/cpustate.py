@@ -4,11 +4,9 @@ import ctypes
 import idaapi
 import idautils
 
-from symless.cpustate import *
-
-import symless.ida_utils as ida_utils
 import symless.cpustate.arch as arch
-
+import symless.ida_utils as ida_utils
+from symless.cpustate import *
 
 # max functions depth to propagate a structure
 MAX_PROPAGATION_RECURSION = 100
@@ -97,7 +95,7 @@ def handle_mov_reg_mem(state: state_t, insn: idaapi.insn_t, dst: idaapi.op_t, sr
     value = ida_utils.get_nb_bytes(src.addr, nbytes)
     if value is not None:
         state.set_register(dst.reg, mem_t(value, src.addr, nbytes))
-    else: # register loaded with bss data
+    else:  # register loaded with bss data
         state.drop_register(dst.reg)
 
 
@@ -145,7 +143,7 @@ def handle_jump(state: state_t, insn: idaapi.insn_t, op: idaapi.op_t):
 
 def handle_lea_reg_mem(state: state_t, insn: idaapi.insn_t, dst: idaapi.op_t, src: idaapi.op_t):
     # avoid 'lea esi, ds:2[rax*2]' flagged as 'lea reg, mem'
-    if src.specflag1: # hasSIB
+    if src.specflag1:  # hasSIB
         state.drop_register(dst.reg)
     else:
         state.set_register(dst.reg, mem_t(src.addr, src.addr, ida_utils.get_ptr_size()))
@@ -215,7 +213,7 @@ def handle_stack_shift(state: state_t, op: idaapi.op_t, is_push: bool) -> stack_
     stack_ptr = get_stack_ptr(state)
     if not isinstance(stack_ptr, stack_ptr_t):
         return None
-    
+
     if is_push:
         size = -size
 
@@ -283,14 +281,13 @@ g_insn_handlers = [
         ([idaapi.NN_push], (idaapi.o_displ,), handle_ignored_push_pop),  # push [ebp+var_14]
         ([idaapi.NN_push], (idaapi.o_mem,), handle_ignored_push_pop),  # push bss_var
         ([idaapi.NN_push], (idaapi.o_phrase,), handle_ignored_push_pop),  # push dword[rcx]
-        ([idaapi.NN_pop], (idaapi.o_reg,), handle_pop_reg), # pop rbp
-        ([idaapi.NN_pop], (idaapi.o_displ,), handle_ignored_push_pop), # pop [rbp+var_14]
-        ([idaapi.NN_pop], (idaapi.o_phrase,), handle_ignored_push_pop), # pop [rcx]
-        ([idaapi.NN_pop], (idaapi.o_mem,), handle_ignored_push_pop), # pop data_var
+        ([idaapi.NN_pop], (idaapi.o_reg,), handle_pop_reg),  # pop rbp
+        ([idaapi.NN_pop], (idaapi.o_displ,), handle_ignored_push_pop),  # pop [rbp+var_14]
+        ([idaapi.NN_pop], (idaapi.o_phrase,), handle_ignored_push_pop),  # pop [rcx]
+        ([idaapi.NN_pop], (idaapi.o_mem,), handle_ignored_push_pop),  # pop data_var
         (INSN_CALLS, (0,), handle_call),  # call ?
         (INSN_JUMPS, (0,), handle_jump),  # jne  ?
     ),
-
     (
         ### 2 operands instructions ###
         (INSN_MOVES, (idaapi.o_phrase, idaapi.o_reg), handle_mov_disp_reg),  # mov [rcx], rax
@@ -301,17 +298,25 @@ g_insn_handlers = [
         (INSN_MOVES, (idaapi.o_reg, idaapi.o_imm), handle_mov_reg_imm),  # mov rax, 10h
         (INSN_MOVES, (idaapi.o_reg, idaapi.o_mem), handle_mov_reg_mem),  # mov rax, @addr
         (INSN_MOVES, (idaapi.o_reg, idaapi.o_phrase), handle_mov_reg_disp),  # mov rax, [rbx]
-        (INSN_MOVES, (idaapi.o_reg, idaapi.o_displ), handle_mov_reg_disp,),  # mov rax, [rbx+10h]
+        (
+            INSN_MOVES,
+            (idaapi.o_reg, idaapi.o_displ),
+            handle_mov_reg_disp,
+        ),  # mov rax, [rbx+10h]
         (INSN_MOVES, (idaapi.o_mem, 0), handle_ignore),  # mov @addr, ?
         (INSN_TESTS, (0, 0), handle_test),  # test ?, ?
         (INSN_CMPS, (0, 0), handle_test),  # cmp ?, ?
         (INSN_LEAS, (idaapi.o_reg, idaapi.o_mem), handle_lea_reg_mem),  # lea rax, @addr
-        (INSN_LEAS, (idaapi.o_reg, idaapi.o_displ), handle_lea_reg_disp,),  # lea rax, [rbx+10h]
+        (
+            INSN_LEAS,
+            (idaapi.o_reg, idaapi.o_displ),
+            handle_lea_reg_disp,
+        ),  # lea rax, [rbx+10h]
         (INSN_LEAS, (idaapi.o_reg, 0), handle_ignore),  # lea rax, ?
         (INSN_XORS, (idaapi.o_reg, idaapi.o_reg), handle_xor_reg_reg),  # xor rax, rax
-        (INSN_ANDS, (idaapi.o_reg, idaapi.o_imm), handle_and_reg_imm),   # and esp, 0xfffffff0
+        (INSN_ANDS, (idaapi.o_reg, idaapi.o_imm), handle_and_reg_imm),  # and esp, 0xfffffff0
         (INSN_MATHS, (idaapi.o_reg, idaapi.o_imm), handle_add_reg_imm),  # add rax, 10h
-    )
+    ),
 ]
 
 
@@ -420,10 +425,10 @@ def process_instruction(state: state_t, insn: idaapi.insn_t):
             cur = state.get_previous_register(base)
             state.arguments.validate(cur)
 
-            if index == x86_INDEX_NONE: # ignore base + index*scale + offset
+            if index == x86_INDEX_NONE:  # ignore base + index*scale + offset
                 nbytes = idaapi.get_dtype_size(op.dtype)
                 state.access_to(insn.ea, i, disp_t(base, op.addr, nbytes))
-            else: # validate index usage
+            else:  # validate index usage
                 cur = state.get_previous_register(index)
                 state.arguments.validate(cur)
 
@@ -460,7 +465,7 @@ def get_previous_state(flow, idx, prev_states) -> state_t:
             return prev_states[idaapi.BADADDR].copy()
 
         out = state_t()
-        out.arguments = prev_states[idaapi.BADADDR].arguments # keep arguments tracker
+        out.arguments = prev_states[idaapi.BADADDR].arguments  # keep arguments tracker
         return out
 
     # only one predecessor, use its state
@@ -557,7 +562,7 @@ class function_t:
 
         # approximate count of arguments
         self.args_count = self.cc.get_arg_count()
-        self.args = [set() for i in range(self.args_count)] # sets of (sid, shift)
+        self.args = [set() for i in range(self.args_count)]  # sets of (sid, shift)
 
         self.cc_not_guessed = True
 
@@ -609,8 +614,8 @@ class function_t:
 
 # Injector into state_t
 class injector_t:
-    def __init__(self, callback = None, before_update: bool = True):
-        self.callback = callback # callback(state: state_t, ea: int)
+    def __init__(self, callback=None, before_update: bool = True):
+        self.callback = callback  # callback(state: state_t, ea: int)
         self.before_update = before_update
 
     # inject before computing current instruction
@@ -637,7 +642,7 @@ class propagation_param_t:
     def __init__(self, injector: injector_t = injector_t(), depth: int = MAX_PROPAGATION_RECURSION):
         self.injector = injector
         self.depth = depth
-        self.visited = dict() # ea -> function_t
+        self.visited = dict()  # ea -> function_t
 
     # is there a potential new state we need to visit
     def should_propagate(self, state: state_t, ea: int, from_callee: bool, is_jump: bool) -> bool:
@@ -706,7 +711,9 @@ def validate_passthrough_args(caller_state: state_t, callee: function_t, is_call
 
 
 # Propagate starting_state into func, follow calls depending on depth & visited
-def function_execution_flow(func: idaapi.func_t, starting_state: state_t, params: propagation_param_t):
+def function_execution_flow(
+    func: idaapi.func_t, starting_state: state_t, params: propagation_param_t
+):
     fct_model = params.update_visited(func.start_ea, starting_state)
 
     starting_state.reset_arguments(fct_model.cc)
@@ -752,9 +759,15 @@ def function_execution_flow(func: idaapi.func_t, starting_state: state_t, params
                 populate_arguments(callee_starting_state, callee_model.cc, state, is_call)
 
                 params.depth -= 1
-                for (ea, callee_state) in function_execution_flow(callee, callee_starting_state, params):
+                for (ea, callee_state) in function_execution_flow(
+                    callee, callee_starting_state, params
+                ):
                     # get callee return value
-                    if callee_state.ret is not None and callee.contains(callee_state.ret.where) and not isinstance(ret_value, sid_t):
+                    if (
+                        callee_state.ret is not None
+                        and callee.contains(callee_state.ret.where)
+                        and not isinstance(ret_value, sid_t)
+                    ):
                         ret_value = callee_state.ret.code
 
                     yield ea, callee_state
@@ -775,13 +788,15 @@ def function_execution_flow(func: idaapi.func_t, starting_state: state_t, params
 
 
 # copy arguments from caller state to callee state, depending on callee cc
-def populate_arguments(callee_state: state_t, callee_cc: arch.abi_t, caller_state: state_t = None, is_call: bool = True):
+def populate_arguments(
+    callee_state: state_t, callee_cc: arch.abi_t, caller_state: state_t = None, is_call: bool = True
+):
     for i in range(callee_cc.get_arg_count()):
         arg = None
         if caller_state is not None:
             arg = get_argument(callee_cc, caller_state, i, False, not is_call)
 
-        if arg is None or isinstance(arg, stack_ptr_t): # stack tracking is local to function
+        if arg is None or isinstance(arg, stack_ptr_t):  # stack tracking is local to function
             set_argument(callee_cc, callee_state, i, arg_t(i))
         else:
             # copy so we have a fresh reference for args count tracking

@@ -4,7 +4,6 @@ import enum
 
 import idaapi
 
-
 ###################
 # CPU definitions #
 ###################
@@ -197,16 +196,17 @@ INSN_LEAS = [idaapi.NN_lea]
 
 # for operand [rax + rcx*scale + disp] get base reg (rax)
 def x64_base_reg(insn: idaapi.insn_t, op: idaapi.op_t):
-    if op.specflag1 == 0: # no SIB in op
+    if op.specflag1 == 0:  # no SIB in op
         return op.phrase
 
     base = op.specflag2 & 7
 
     # REX byte, 64-bytes mode
-    if insn.insnpref & 1: # sid base extension
+    if insn.insnpref & 1:  # sid base extension
         base |= 8
 
     return base
+
 
 x86_INDEX_NONE = 4
 # for operand [rax + rcx*scale + disp] get index reg (rcx)
@@ -215,10 +215,11 @@ def x64_index_reg(insn: idaapi.insn_t, op: idaapi.op_t):
         return x86_INDEX_NONE
 
     index = (op.specflag2 >> 3) & 7
-    if insn.insnpref & 2: # sib index extension
+    if insn.insnpref & 2:  # sib index extension
         index |= 8
 
     return index
+
 
 # insn.itype to string
 def insn_itype_str(insn_itype) -> str:
@@ -268,7 +269,7 @@ def op_str(op) -> str:
 
 # convert data to given size & sign
 def convert_imm(value: int, sizeof: int, signed: bool = True) -> int:
-    mask = (1 << (sizeof * 8))
+    mask = 1 << (sizeof * 8)
     out = value & (mask - 1)
     if signed and (out & (mask >> 1)):
         out -= mask
@@ -320,7 +321,7 @@ class buff_t:
 
 # struct operand
 class sid_t(buff_t):
-    def __init__(self, sid, shift = 0):
+    def __init__(self, sid, shift=0):
         super().__init__(shift)
         self.sid = sid
 
@@ -346,7 +347,7 @@ class int_t(buff_t):
         super().__init__(val)
 
         self.size = sizeof
-        self.shift = convert_imm(self.shift, self.size, False) # keep int_t unsigned
+        self.shift = convert_imm(self.shift, self.size, False)  # keep int_t unsigned
 
     def get_val(self) -> int:
         return self.shift
@@ -415,7 +416,7 @@ class ret_t:
     def __init__(self, code, where: int):
         self.code = code
         self.where = where
-    
+
     def __repr__(self):
         return "ret:%s" % self.code
 
@@ -425,8 +426,8 @@ class ret_t:
 class arguments_t:
     def __init__(self, state, cc):
         self.args = dict()
-        self.cc = cc # record what cc was used when saving args
-        self.guessed_args_count = -1 # args count - 1
+        self.cc = cc  # record what cc was used when saving args
+        self.guessed_args_count = -1  # args count - 1
         self.individual_validation = [False for i in range(cc.get_arg_count())]
 
         # record state initial (potential) arguments
@@ -454,7 +455,7 @@ class arguments_t:
 # tracks the stack state
 class stack_t:
     def __init__(self):
-        self.stack = dict() # offset -> value
+        self.stack = dict()  # offset -> value
 
     def push(self, shift: int, value):
         self.stack[shift] = value
@@ -476,12 +477,12 @@ class call_type_t(enum.Enum):
 # a cpu state (stack, registers, ..)
 class state_t:
     def __init__(self):
-        self.previous = registers_t() # registers after computing previous insn
-        self.registers = registers_t() # registers after computing current insn
+        self.previous = registers_t()  # registers after computing previous insn
+        self.registers = registers_t()  # registers after computing current insn
 
-        self.writes = [] # list of write_t
-        self.reads = [] # list of read_t
-        self.access = [] # list of access_t
+        self.writes = []  # list of write_t
+        self.reads = []  # list of read_t
+        self.access = []  # list of access_t
 
         self.call_type = None
         self.call_to = None
@@ -600,6 +601,7 @@ import symless.cpustate.arch as arch
 # global calling convention & abi
 g_abi = None
 
+
 def get_abi() -> arch.abi_t:
     global g_abi
 
@@ -607,39 +609,56 @@ def get_abi() -> arch.abi_t:
         g_abi = arch.get_abi()
     return g_abi
 
+
 # default calling convention to use on basic functions
 def get_default_cc() -> arch.abi_t:
     return get_abi().get_default_cc()
+
 
 # cc to use for class methods
 def get_object_cc() -> arch.abi_t:
     return get_abi().get_object_cc()
 
+
 # set value of stack ptr in given state_t
 def set_stack_ptr(state: state_t, value):
     get_abi().set_stack_ptr(state, value)
+
 
 # get stack ptr value in given state_t
 def get_stack_ptr(state: state_t):
     return get_abi().get_stack_ptr(state)
 
+
 # set ret register value
 def set_ret_value(state: state_t, value):
     get_abi().set_ret_value(state, value)
+
 
 # get ret register value
 def get_ret_value(state: state_t):
     return get_abi().get_ret_value(state)
 
+
 # set argument at given index in given state using given cc
-def set_argument(cc: arch.abi_t, state: state_t, index: int, value, from_callee: bool = True, is_jump: bool = False):
-    if is_jump: # jmp, always from caller state
+def set_argument(
+    cc: arch.abi_t,
+    state: state_t,
+    index: int,
+    value,
+    from_callee: bool = True,
+    is_jump: bool = False,
+):
+    if is_jump:  # jmp, always from caller state
         cc.set_jump_argument(state, index, value)
     else:
         cc.set_argument(state, index, value, from_callee)
 
+
 # get argument at given index in given state using given cc
-def get_argument(cc: arch.abi_t, state: state_t, index: int, from_callee: bool = True, is_jump: bool = False):
+def get_argument(
+    cc: arch.abi_t, state: state_t, index: int, from_callee: bool = True, is_jump: bool = False
+):
     if is_jump:
         return cc.get_jump_argument(state, index)
     return cc.get_argument(state, index, from_callee)

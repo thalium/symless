@@ -10,13 +10,15 @@ file_path = inspect.getsourcefile(lambda: 0)
 root_dir = os.path.dirname(os.path.abspath(file_path))
 
 
-''' IDA main '''
+""" IDA main """
+
 
 def print_delay(prefix: str, start: float, end: float):
     delay = int(end - start)
     min = int(delay / 60)
     sec = delay - (min * 60)
     print("%s in %s%s" % (prefix, "%d minutes and " % min if min > 0 else "", "%d seconds" % sec))
+
 
 def ida_main():
     # parse arguments
@@ -65,10 +67,12 @@ def ida_main():
     idc.qexit(0)
 
 
-''' Command line main '''
+""" Command line main """
+
 
 def cmd_usage():
     print(f"Usage: python {sys.argv[0]} [-c config.csv] <file(s)>")
+
 
 def cmd_main():
     files = []
@@ -98,24 +102,24 @@ def cmd_main():
         run_script(runner, os.path.abspath(file), args)
 
 
-''' Symless main '''
+""" Symless main """
 
 if __name__ == "__main__":
     try:
-        import idaapi
         import ida_ida
+        import idaapi
         import idc
 
     except ModuleNotFoundError:
         from run_script import run_script
 
-        cmd_main() # script run from command line
+        cmd_main()  # script run from command line
 
     else:
         import symless.conflict as conflict
+        import symless.cpustate.arch as arch
         import symless.generation as generation
         import symless.model as model
         import symless.symbols as symbols
-        import symless.cpustate.arch as arch 
 
-        ida_main() # script run from IDA
+        ida_main()  # script run from IDA
