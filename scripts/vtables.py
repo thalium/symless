@@ -3,6 +3,7 @@ import os
 import sys
 
 import idaapi
+import idc
 
 # add symless dir to search path
 symless_dir = os.path.abspath(

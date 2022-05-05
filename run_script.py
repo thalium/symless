@@ -114,7 +114,7 @@ def run_ida(ida_install: tuple, input_file: str, script: str, script_args: [str]
         print("Creating IDA database from binary %s" % input_file)
         (idb_file, ret_code) = make_idb(ida_install, input_file)
         if ret_code != 0:
-            sterr_print(f"Could not create initial database, IDA batchmode returned {ret_code}")
+            stderr_print(f"Could not create initial database, IDA batchmode returned {ret_code}")
             return False
     else:
         idb_file = input_file
