@@ -1,0 +1,30 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.2.0
+    hooks:
+    -   id: check-yaml
+    -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+
+# isort
+-   repo: https://github.com/pre-commit/mirrors-isort
+    rev: v5.10.1
+    hooks:
+    -   id: isort   
+
+# black 
+-   repo: https://github.com/psf/black
+    rev: 22.3.0
+    hooks:
+    - id: black
+      args: # arguments to configure black
+        - --line-length=88   
+
+# # flake8
+# -   repo: https://github.com/pre-commit/pre-commit-hooks
+#     rev: v2.3.0
+#     hooks:
+#     - id: flake8
+#       args: # arguments to configure flake8
+#         # making flake8 line length compatible with black
+#         - "--max-line-length=88"
