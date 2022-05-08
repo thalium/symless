@@ -39,9 +39,9 @@ ntoskrnl, ExAllocatePoolWithTag, malloc(1)
 ntoskrnl, ExAllocatePoolWithTagPriority, malloc(1)
 
 # GLIBC 2.31
-.dynsym, malloc@@GLIBC_2.0, malloc
-.dynsym, calloc@@GLIBC_2.0, calloc
-.dynsym, realloc@@GLIBC_2.0, realloc
+.dynsym, malloc@@GLIBC_, malloc
+.dynsym, calloc@@GLIBC_, calloc
+.dynsym, realloc@@GLIBC_, realloc
 
-.dynsym, _Znwj@@GLIBCXX_3.4, malloc # operator new(uint)
-.dynsym, _Znwm@@GLIBCXX_3.4, malloc # operator new(ulong)
+.dynsym, _Znwj@@GLIBCXX_, malloc # operator new(uint)
+.dynsym, _Znwm@@GLIBCXX_, malloc # operator new(ulong)

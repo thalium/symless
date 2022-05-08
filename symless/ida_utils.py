@@ -20,7 +20,7 @@ def get_import_from_module(module: int, import_name: str) -> int:
 
     def iterator(ea, name, ord):
         nonlocal import_ea, import_name
-        if name == import_name:
+        if name.startswith(import_name):
             import_ea = ea
             return False
         return True
