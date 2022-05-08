@@ -6,6 +6,7 @@ import idautils
 
 import symless.cpustate.arch as arch
 import symless.ida_utils as ida_utils
+import symless.settings as settings
 from symless.cpustate import *
 
 # max functions depth to propagate a structure
@@ -395,6 +396,14 @@ def handle_two_ops_insn(state: state_t, insn: idaapi.insn_t, ops):
         raise BaseException("not implemented")
 
 
+# pretty print state and insn when debug mode is enabled
+def dbg_dump_state_insn(insn: state_t, ops: list, state: state_t):
+    if settings.settings.is_debug():
+        print("---------------------------------------------------------")
+        dump_insn(insn, ops)
+        print("state", state)
+
+
 # process one instruction & update current state
 def process_instruction(state: state_t, insn: idaapi.insn_t):
     ops = get_insn_ops(insn)
@@ -431,6 +440,8 @@ def process_instruction(state: state_t, insn: idaapi.insn_t):
             else:  # validate index usage
                 cur = state.get_previous_register(index)
                 state.arguments.validate(cur)
+
+    dbg_dump_state_insn(insn, ops, state)
 
 
 # read all instructions from input basic block
