@@ -227,6 +227,8 @@ def insn_itype_str(insn_itype) -> str:
         return "lea"
     if insn_itype == idaapi.NN_push:
         return "push"
+    if insn_itype == idaapi.NN_pop:
+        return "pop"
     if insn_itype in INSN_MOVES:
         return "mov"
     if insn_itype in INSN_MATH:

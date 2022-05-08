@@ -350,7 +350,7 @@ def validate_function_arguments(fct: model.function_t):
 
             _, shift = fct.args[i]
 
-            subject = model.model_t(-1, None, model.model_type.STRUCTURE_UKWN_SIZE)
+            subject = model.model_t(-1, 0, model.model_type.STRUCTURE_UKWN_SIZE)
             ctx.add_model(subject)
             cpustate.set_argument(fct.cc, state, i, cpustate.sid_t(subject.sid, shift))
 

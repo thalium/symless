@@ -30,8 +30,13 @@ class BuildHandler(idaapi.action_handler_t):
         if reg_id < 0:
             return 0
 
-        # consider first operand to be the dst operand
+        # consider first operand to be the dst operand except if it is push
         dst_op = op.n == 0
+        insn = idaapi.insn_t()
+        idaapi.decode_insn(insn, ctx.cur_ea)
+
+        if insn.itype == idaapi.NN_push:
+            dst_op = False
 
         # arch supported
         if not arch.is_arch_supported():
