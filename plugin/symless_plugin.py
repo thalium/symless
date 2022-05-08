@@ -4,6 +4,7 @@ import os
 import idaapi
 
 import symless
+import symless.settings
 from symless import conflict, existing, generation, ida_utils, model, symbols
 from symless.cpustate import arch, cpustate
 
@@ -12,7 +13,9 @@ RESOURCES_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "symles
 
 def reload_plugin():
 
+    importlib.reload(symless.settings)
     importlib.reload(symless)
+    importlib.reload(symless.cpustate)
     importlib.reload(cpustate)
     importlib.reload(conflict)
     importlib.reload(arch)
@@ -21,6 +24,8 @@ def reload_plugin():
     importlib.reload(model)
     importlib.reload(symbols)
     importlib.reload(ida_utils)
+
+    symless.settings.settings = symless.settings.load_settings()
 
 
 # Propagate & build structure action

@@ -3,6 +3,7 @@ import ctypes
 import enum
 
 import idaapi
+import idc
 
 ###################
 # CPU definitions #
@@ -258,8 +259,8 @@ def op_dtype_str(dtype) -> str:
 
 
 # get instruction str representation
-def insn_str(insn) -> str:
-    return f"insn:{insn.ea:x} type:{insn.itype} {insn_itype_str(insn.itype)}"
+def insn_str(insn: idaapi.insn_t) -> str:
+    return f"insn:{insn.ea:x} type:{insn.itype} {insn_itype_str(insn.itype)} ({idc.generate_disasm_line(insn.ea, 0)})"
 
 
 # get operand str representation
@@ -589,7 +590,7 @@ class state_t:
     # cpu state representation
     def __repr__(self):
         regs = []
-        for k in vars(self.registers):
+        for k in sorted(vars(self.registers)):
             regs.append(f"{k}:{getattr(self.registers, k)}")
         return " ".join(regs)
 
