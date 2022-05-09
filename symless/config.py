@@ -5,6 +5,7 @@ import idaapi
 
 import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
+import symless.utils as utils
 
 # do not consider alloc bigger than this to be object allocs
 g_max_alloc = 0xFFFFFF
@@ -203,7 +204,7 @@ def get_entry_points(config_path: str):
     try:
         config = open(config_path)
     except FileNotFoundError as e:
-        print("Error: can not retrieve config file (%s)" % str(e))
+        utils.logger.error("Can not retrieve config file (%s)" % str(e))
         return None
 
     i = 1
@@ -217,13 +218,13 @@ def get_entry_points(config_path: str):
             keys = current.split(",")
             length = len(keys)
             if length > 3 or length < 2:
-                print("Error: %s bad syntax at line %d" % (config_path, i))
+                utils.logger.error("%s bad syntax at line %d" % (config_path, i))
                 return None
 
             import_type, args = parse_allocator(keys[-1].strip())
             if import_type is None:
-                print(
-                    'Error: %s bad syntax for allocator type "%s" at line %d'
+                utils.logger.error(
+                    '%s bad syntax for allocator type "%s" at line %d'
                     % (config_path, keys[-1].strip(), i)
                 )
                 return None
@@ -237,19 +238,21 @@ def get_entry_points(config_path: str):
                 module = ida_utils.get_import_module_index(module_name)
 
                 if module is None:
-                    # print("Warning: import %s from module %s absent from binary (module not imported)" % (import_name, module_name))
+                    utils.logger.warning(
+                        "import %s from module %s absent from binary (module not imported)"
+                        % (import_name, module_name)
+                    )
                     pass
                 else:
                     ea = ida_utils.get_import_from_module(module, import_name)
                     if ea is None:
-                        print(
-                            "Warning: import %s from module %s absent from binary"
+                        utils.logger.warning(
+                            "import %s from module %s absent from binary"
                             % (import_name, module_name)
                         )
                     else:
-                        print(
-                            "Info: retrieved entry point %s from module %s"
-                            % (import_name, module_name)
+                        utils.logger.info(
+                            "retrieved entry point %s from module %s" % (import_name, module_name)
                         )
 
                         imports.append(import_type(ea, *args))
@@ -266,9 +269,9 @@ def get_entry_points(config_path: str):
 
                 func = idaapi.get_func(func_ea)
                 if func is None or func.start_ea != func_ea:
-                    print('Error: unable to located entry point "%s"' % func_name)
+                    utils.logger.error('Unable to located entry point "%s"' % func_name)
                 else:
-                    print('Info: retrieved entry point "%s"' % func_name)
+                    utils.logger.info('Retrieved entry point "%s"' % func_name)
 
                     imports.append(import_type(func.start_ea, *args))
 

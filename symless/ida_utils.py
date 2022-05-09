@@ -3,6 +3,7 @@ import idautils
 import idc
 
 import symless.cpustate.cpustate as cpustate
+import symless.utils as utils
 
 """ Imports utilities """
 
@@ -165,6 +166,7 @@ def is_vtable_start(ea: int) -> int:
 
         # code loads the ea into a register
         if not is_vtable_load(xref):
+            utils.logger.debug(f"{hex(ea)} is not a vtable")
             return idaapi.BADADDR
 
         # value from ea is stored into a struct
@@ -174,10 +176,12 @@ def is_vtable_start(ea: int) -> int:
 
         # stored addr points to a functions ptrs array
         if vtable_size(stored_value) == 0:
+            utils.logger.debug(f"{hex(ea)} is not a vtable")
             return idaapi.BADADDR
 
+        utils.logger.debug(f"{hex(ea)} is a vtable from {hex(stored_value)}")
         return stored_value
-
+    utils.logger.debug(f"{hex(ea)} is not a vtable")
     return idaapi.BADADDR
 
 
@@ -219,7 +223,10 @@ def vtable_size(addr: int) -> int:
 # scans given segment for vtables
 # WARN: will not return vtables only used at virtual bases (vbase)
 def get_all_vtables_in(seg: idaapi.segment_t):
-    # print("INFO: scanning segment %s[%x, %x] for vtables" % (idaapi.get_segm_name(seg), seg.start_ea, seg.end_ea))
+    utils.logger.info(
+        "scanning segment %s[%x, %x] for vtables"
+        % (idaapi.get_segm_name(seg), seg.start_ea, seg.end_ea)
+    )
 
     current = seg.start_ea
     while current != idaapi.BADADDR and current < seg.end_ea:
@@ -233,6 +240,7 @@ def get_all_vtables_in(seg: idaapi.segment_t):
         # references a vtable ?
         effective_vtable = is_vtable_start(current)
         if effective_vtable != idaapi.BADADDR:
+            utils.logger.info(f"vtable found : {hex(effective_vtable)}")
             yield (current, effective_vtable)
 
         current = idaapi.next_head(current, seg.end_ea)
@@ -245,6 +253,7 @@ def get_all_vtables():
 
         # search for vtables in .data and .text segments
         if seg.type == idaapi.SEG_CODE or seg.type == idaapi.SEG_DATA:
+            utils.logger.debug(f"{hex(seg.start_ea)}")
             for i in get_all_vtables_in(seg):
                 yield i
 

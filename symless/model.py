@@ -8,6 +8,7 @@ import idautils
 import symless.config as config
 import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
+import symless.utils as utils
 
 
 # from most interesting to last (for merge decisions)
@@ -127,6 +128,7 @@ class model_t:
 
     # update size to match last member
     def update_size(self):
+        utils.logger.debug("")
         if len(self.members) > 0:
             last = self.members[-1]
             self.size = last[0] + last[1]
@@ -264,12 +266,14 @@ class model_t:
         return isinstance(other, model_t) and self.sid == other.sid
 
     def dump(self, shift=""):
-        print("%s%s (size: %d) - %s:" % (shift, self.get_name(), self.size, str(self.type)))
+        utils.logger.debug(
+            "%s%s (size: %d) - %s:" % (shift, self.get_name(), self.size, str(self.type))
+        )
         shift += "  "
 
-        print("%smembers (%d):" % (shift, len(self.members)))
+        utils.logger.debug("%smembers (%d):" % (shift, len(self.members)))
         for offset, size in self.members:
-            print(
+            utils.logger.debug(
                 "%s%x - %x%s"
                 % (
                     shift,
@@ -278,7 +282,7 @@ class model_t:
                     " -> vtable" if not self.is_vtable() and offset in self.vtables else "",
                 )
             )
-        print()
+        utils.logger.debug("")
 
 
 # Model of a function
@@ -303,8 +307,8 @@ class function_t:
 
         # merge cc
         if self.cc is not None and self.cc != original.cc:
-            print(
-                'Error: guessing multiple cc for function 0x%x, "%s" != "%s"'
+            utils.logger.error(
+                'Guessing multiple cc for function 0x%x, "%s" != "%s"'
                 % (self.ea, self.cc.name, original.cc.name)
             )
         else:
@@ -375,6 +379,7 @@ class context_t:
 
     # get ctors for already visited classes
     def get_visited_ctors(self) -> dict:
+        utils.logger.debug("")
         out = dict()
         for model in self.get_models():
             if model.ctor_ea is not None:
@@ -434,6 +439,7 @@ class context_t:
         return ea in self.functions
 
     def update_functions(self, visited: dict):
+        utils.logger.debug("")
         for ea, function in visited.items():
             if not function.has_args():
                 continue
@@ -447,14 +453,14 @@ class context_t:
         return len(self.models)
 
     def dump(self):
-        print("# Memory allocators:")
+        utils.logger.debug("# Memory allocators:")
         for alloc in self.allocators:
-            print(alloc)
+            utils.logger.debug(alloc)
 
-        print("\n# Models:\n")
+        utils.logger.debug("\n# Models:\n")
         for model in self.get_models():
             model.dump()
-            print()
+            utils.logger.debug("")
 
 
 # link between discarded model and its replacement
@@ -570,7 +576,7 @@ def get_effective_vtables(vtables: list, ctx: context_t) -> list:
 # select last original vtable loaded, aka last vtable used in ctor = effective one
 def select_class_vtables(model: model_t, ctx: context_t):
     for offset in model.vtables:
-
+        utils.logger.debug(model)
         if model.is_struct():  # propagation started with ctor
             model.vtables[offset] = get_unique_vtables(model.vtables[offset])
         else:  # model propagated in ctors/dtors, no specific order
@@ -597,13 +603,14 @@ def analyze_vtable(
 
 # continue model building by analyzing newly found virtual functions
 def analyze_model_vtables(model: model_t, params: cpustate.propagation_param_t, ctx: context_t):
-
+    utils.logger.debug("")
     # select effective vtables before propagation
     select_class_vtables(model, ctx)
 
     cc = cpustate.get_object_cc()
 
     for offset in model.vtables:
+        utils.logger.debug(offset)
 
         starting_state = cpustate.state_t()
         cpustate.populate_arguments(starting_state, cc)
@@ -686,8 +693,8 @@ def handle_write(ea: int, state: cpustate.state_t, ctx: context_t):
 
             model = ctx.models[cur.sid]
             if model.is_vtable():
-                print(
-                    "Warning: propagation found %s having another vtable (0x%x) loaded at 0x%x. Ignoring.."
+                utils.logger.warning(
+                    "propagation found %s having another vtable (0x%x) loaded at 0x%x. Ignoring.."
                     % (model.get_name(), vtable_ea, ea)
                 )
                 continue
@@ -813,9 +820,13 @@ def analyze_allocator_heirs(allocator: config.allocator_t, ctx: context_t):
     ctx.add_allocator(allocator)
 
     for current in ida_utils.get_all_references(allocator.ea):
+
         insn = idautils.DecodeInstruction(current)
         if insn is None:
+            utils.logger.debug(f"ignore xref {hex(current)}")
             continue
+
+        utils.logger.debug(f"analyse xref {hex(current)}")
 
         if insn.itype in [
             idaapi.NN_jmp,
@@ -837,6 +848,7 @@ def analyze_allocator_heirs(allocator: config.allocator_t, ctx: context_t):
 # from the given entry points (list of allocator functions)
 def analyze_allocations(imports: [], ctx: context_t):
     for i in imports:
+        utils.logger.debug(i)
         analyze_allocator_heirs(i, ctx)
 
 
@@ -874,6 +886,7 @@ def get_ctors() -> dict:
     # associate each ctor/dtor to one vtable (effective table of one class)
     ctor_vtbl = dict()  # ctor_ea -> vtbl_ea
     for vtbl_ref, vtbl_addr in ida_utils.get_all_vtables():
+        utils.logger.debug(f"{vtbl_ref} {vtbl_addr}")
         for xref in ida_utils.get_data_references(vtbl_ref):
             if not ida_utils.is_vtable_load(xref):
                 continue
@@ -894,26 +907,31 @@ def get_ctors() -> dict:
     # regroup ctors/dtors by families
     mifa = dict()  # vtbl_ea -> list of ctors
     for ctor, vtbl in ctor_vtbl.items():
+        utils.logger.debug(f"{ctor} {vtbl}")
         if vtbl not in mifa:
             mifa[vtbl] = collections.deque()
         mifa[vtbl].append(ctor)
-
+    utils.logger.debug("")
     return mifa
 
 
 # analyze unvisited ctors / dtors and build model
 def analyze_ctors(ctx: context_t):
+    utils.logger.debug("")
     visited = ctx.get_visited_ctors()
+    utils.logger.debug("")
 
     count = 0
     cc = cpustate.get_object_cc()
-
+    utils.logger.debug("")
     for fam in get_ctors().values():
+        utils.logger.debug(fam)
 
         # was the model already generated ?
         model = None
         from_existing = False
         for ctor in fam:
+            utils.logger.debug(ctor)
             if ctor in visited:
                 model = visited[ctor]
                 from_existing = True
@@ -933,7 +951,7 @@ def analyze_ctors(ctx: context_t):
 
         # propagate model in ctors / dtors
         for ctor in fam:
-
+            utils.logger.debug(ctor)
             if not from_existing:
                 model.ea.append(ctor)
             elif ctx.has_function(ctor):  # propagation was already done there for this model
@@ -956,7 +974,7 @@ def analyze_ctors(ctx: context_t):
 
         count += 1
 
-    print("Info: %d additionnal classes retrieved from their vtables" % count)
+    utils.logger.info("%d additionnal classes retrieved from their vtables" % count)
 
 
 """ Model generation main """
@@ -971,8 +989,8 @@ def generate_model(config_path: str) -> context_t:
 
     # retrieved structures allocated
     if len(imports) == 0:
-        print(
-            "Warning: None of the defined allocators are present. No structure will be found from allocations"
+        utils.logger.warning(
+            "None of the defined allocators are present. No structure will be found from allocations"
         )
     else:
         analyze_allocations(imports, ctx)

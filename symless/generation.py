@@ -6,6 +6,7 @@ import symless.existing as existing
 import symless.ida_utils as ida_utils
 import symless.model as model
 import symless.symbols as symbols
+import symless.utils as utils
 
 
 # Apply struc type on operand
@@ -295,9 +296,8 @@ def set_functions_type(functions: dict, force: bool = True):
 # Generate structures from model
 def generate_structs(ctx: model.context_t) -> int:
 
-    print(
-        "Info: generating %d structures.."
-        % sum([(0 if i.is_empty() else 1) for i in ctx.get_models()])
+    utils.logger.info(
+        "Generating %d structures.." % sum([(0 if i.is_empty() else 1) for i in ctx.get_models()])
     )
 
     # generate empty strucs to be used as types

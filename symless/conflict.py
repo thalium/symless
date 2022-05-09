@@ -7,6 +7,7 @@ import idaapi
 import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
 import symless.model as model
+import symless.utils as utils
 
 """ Within model conflicts resolution """
 
@@ -61,7 +62,7 @@ class belligerents_t:
     def dump(self, ctx: model.context_t):
         for sid, offset in self.get_subjects():
             model = ctx.models[sid]
-            print("  for %s (%d) at %x" % (model.get_name(), model.sid, offset))
+            utils.logger.debug("  for %s (%d) at %x" % (model.get_name(), model.sid, offset))
 
     def __eq__(self, other):
         if type(self) != type(other):
@@ -107,11 +108,11 @@ class conflicts_t:
     def dump(self, ctx: model.context_t):
         for b in self.get_all_conficts():
             bound = self.get_conflicting_area(b)
-            print(
+            utils.logger.debug(
                 "Conflict on area [%x, %x] (size: %x):" % (bound.lower, bound.upper, bound.size())
             )
             b.dump(ctx)
-            print()
+            utils.logger.debug("")
 
 
 """ Similar models merging """
@@ -226,8 +227,8 @@ def find_less_derived(candidates: list, conflict_ea: int = 0):
 
     conflict_vtables = [i[0].get_name() for i in filter(lambda k: k[0].is_vtable(), candidates)]
     conflict_structs = [i[0].get_name() for i in filter(lambda k: not k[0].is_vtable(), candidates)]
-    print(
-        "Warning: conflict on 0x%x involves %d structures & %d vtables, %s <-> %s"
+    utils.logger.warning(
+        "Conflict on 0x%x involves %d structures & %d vtables, %s <-> %s"
         % (
             conflict_ea,
             len(conflict_structs),
@@ -387,7 +388,9 @@ def validate_function_arguments(fct: model.function_t):
         # heuristic 2: discard structure argument when only the base of the structure was used
         subject.update_size()
         if subject.size <= 4 and original.size > subject.size:
-            # print("function %x, arg %d (%s) was discarded" % (fct.ea, index, original.get_name()))
+            utils.logger.debug(
+                "function %x, arg %d (%s) was discarded" % (fct.ea, index, original.get_name())
+            )
             fct.discard_arg(index)
 
 
@@ -431,33 +434,28 @@ def get_unresolved_conflicts_count(ctx: model.context_t):
 
 
 # Solve all conflicts in the given model
-def solve_conflicts(ctx: model.context_t, verbose: bool = True):
+def solve_conflicts(ctx: model.context_t):
 
     # Select vtable owner
     for mod in ctx.get_models():
         if mod.is_vtable():
             select_vtable_owner(mod)
 
-    if verbose:
-        print("Info: conflicts count before resolution: %d" % get_unresolved_conflicts_count(ctx))
+    utils.logger.info("conflicts count before resolution: %d" % get_unresolved_conflicts_count(ctx))
 
     # global conflicts
     resolve_state_conflicts(ctx)
 
-    if verbose:
-        print(
-            "Info: conflicts count after model refactoring: %d"
-            % get_unresolved_conflicts_count(ctx)
-        )
+    utils.logger.info(
+        "conflicts count after model refactoring: %d" % get_unresolved_conflicts_count(ctx)
+    )
 
     # select target for conflicting operands
     select_operands_target(ctx)
 
-    if verbose:
-        print(
-            "Info: conflicts count after operands assignment: %d"
-            % get_unresolved_conflicts_count(ctx)
-        )
+    utils.logger.info(
+        "conflicts count after operands assignment: %d" % get_unresolved_conflicts_count(ctx)
+    )
 
     # find arguments to apply to retrieved functions
     select_functions_arguments(ctx)

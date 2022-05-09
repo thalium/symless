@@ -8,13 +8,14 @@ import symless.cpustate.arch as arch
 import symless.generation as generation
 import symless.model as model
 import symless.symbols as symbols
+import symless.utils as utils
 from symless.utils import print_delay
 
 
 def symless_analyse(config_path):
     # check binary type
     if not arch.is_arch_supported():
-        print("Error: Unsupported arch (%s) or filetype" % arch.get_proc_name())
+        utils.logger.error("Unsupported arch (%s) or filetype" % arch.get_proc_name())
         idc.qexit(0)
 
     # initial ida autoanalysis
@@ -47,4 +48,4 @@ def symless_analyse(config_path):
         idaapi.auto_wait()
         print_delay("Info: final IDA autoanalysis", start, time.time())
 
-        print("Info: %d structures generated" % total)
+        utils.logger.info("%d structures generated" % total)

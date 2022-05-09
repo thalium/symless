@@ -10,12 +10,12 @@ class Settings:
             os.path.join(os.path.dirname(os.path.realpath(__file__)), "config/settings.json"), "rb"
         ) as settings_file:
             self.settings = json.load(settings_file)
-        self.DEBUG = False
-        if "debug" in self.settings:
-            self.DEBUG = self.settings["debug"] == 1
+        self.LOG_LEVEL = 30
+        if "log_level" in self.settings:
+            self.LOG_LEVEL = self.settings["log_level"]
 
-    def is_debug(self):
-        return self.DEBUG
+    def get_log_level(self):
+        return self.LOG_LEVEL
 
 
 def load_settings():

@@ -6,7 +6,7 @@ import idautils
 
 import symless.cpustate.arch as arch
 import symless.ida_utils as ida_utils
-import symless.settings as settings
+import symless.utils as utils
 from symless.cpustate import *
 
 # max functions depth to propagate a structure
@@ -331,9 +331,9 @@ def check_types(effective: tuple, expected: tuple) -> bool:
 
 # dump insn & operands
 def dump_insn(insn: idaapi.insn_t, ops):
-    print(insn_str(insn))
+    utils.logger.debug(insn_str(insn))
     for op in ops:
-        print("\t" + op_str(op))
+        utils.logger.debug("\t" + op_str(op))
 
 
 # handle zero-operand instructions
@@ -396,12 +396,11 @@ def handle_two_ops_insn(state: state_t, insn: idaapi.insn_t, ops):
         raise BaseException("not implemented")
 
 
-# pretty print state and insn when debug mode is enabled
+# pretty print state and insn
 def dbg_dump_state_insn(insn: state_t, ops: list, state: state_t):
-    if settings.settings.is_debug():
-        print("---------------------------------------------------------")
-        dump_insn(insn, ops)
-        print("state", state)
+    utils.logger.debug("---------------------------------------------------------")
+    dump_insn(insn, ops)
+    utils.logger.debug(state)
 
 
 # process one instruction & update current state
@@ -421,7 +420,7 @@ def process_instruction(state: state_t, insn: idaapi.insn_t):
     elif op_len == 4:
         handle_reg_drop(state, insn, ops[0])
     else:
-        print("unsupported instruction with %d operands:" % op_len)
+        utils.logger.error("unsupported instruction with %d operands:" % op_len)
         dump_insn(insn, ops)
 
     # register any access through displ missed by custom handlers

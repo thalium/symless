@@ -18,7 +18,6 @@ def ida_main():
     parser.add_argument("--config", type=str, help="config file")
     parser.add_argument("--prefix", type=str, default="", help="log prefix")
     args = parser.parse_args(idc.ARGV[1:])
-    symless.settings.settings = symless.settings.load_settings()
     symless_analyse(args.config)
 
     idc.qexit(0)

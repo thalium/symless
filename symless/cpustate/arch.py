@@ -1,5 +1,6 @@
 import idaapi
 
+import symless.utils as utils
 from symless.cpustate import *
 
 
@@ -142,7 +143,7 @@ def get_abi() -> abi_t:
     else:
         selected = systemv_32_abi_t()
 
-    print("Info: applying %s calling convention" % selected.name)
+    utils.logger.debug("Applying %s calling convention" % selected.name)
 
     return selected
 
