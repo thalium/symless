@@ -1,5 +1,6 @@
 import time
 
+import ida_dirtree
 import idaapi
 import idc
 
@@ -40,6 +41,15 @@ def symless_analyse(config_path):
 
         # import data in ida
         start = time.time()
+
+        # Create symless dir if necessary
+        struc_dir: ida_dirtree.dirtree_t
+        struc_dir = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_STRUCTS)
+        ite = ida_dirtree.dirtree_iterator_t()
+        ok = struc_dir.findfirst(ite, "symless")
+        if not ok:
+            struc_dir.mkdir("symless")
+
         total = generation.generate_structs(model_context)
         print_delay("Info: ida database updated", start, time.time())
 

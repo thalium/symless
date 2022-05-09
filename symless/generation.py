@@ -1,3 +1,4 @@
+import ida_dirtree
 import idaapi
 import idc
 
@@ -8,6 +9,8 @@ import symless.model as model
 import symless.symbols as symbols
 import symless.utils as utils
 
+STRUC_DIR: ida_dirtree.dirtree_t
+STRUC_DIR = None
 
 # Apply struc type on operand
 def set_operand_type(ea: int, n: int, sid: int, shift: int):
@@ -65,7 +68,9 @@ def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
     if sid == idaapi.BADADDR:
         model.set_name(None)  # struct was not added because of bad name
         sid = idaapi.add_struc(idaapi.BADADDR, model.get_name(), False)
+        move_struc_to_symless_dir(model.get_name())
 
+    utils.logger.debug(f"generating content of struct {model.get_name()}")
     struc = idaapi.get_struc(sid)
 
     # make space
@@ -73,6 +78,7 @@ def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
 
     # add members
     for (offset, size) in model.members:
+        utils.logger.debug(f"add struc member {(offset, size)}")
         idaapi.add_struc_member(
             struc, f"field_{offset:08x}", offset, get_data_flags(size), None, size
         )
@@ -101,6 +107,7 @@ def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
 
     # apply struc offsets on operands
     for (ea, n, shift) in model.get_operands():
+        utils.logger.debug(f"creating crefs ea:{hex(ea)} n : {n} shift : {shift}")
         if not existing.has_op_stroff(ea, n):
             set_operand_type(ea, n, sid, shift)
 
@@ -214,6 +221,7 @@ def populate_vtable(vtable: model.model_t, struc: idaapi.struc_t):
 # Set type & rename memory allocators if needed
 def set_allocators_type(allocators: list):
     for alloc in allocators:
+        utils.logger.debug(f"allocator {alloc}")
         # set name
         if not symbols.has_name(alloc.ea):
             idaapi.set_name(alloc.ea, alloc.get_name())
@@ -259,7 +267,7 @@ def get_or_create_fct_type(fea: int, default_cc: int) -> (idaapi.tinfo_t, idaapi
 # type functions crossed during state propagation
 def set_functions_type(functions: dict, force: bool = True):
     for function in functions.values():
-
+        utils.logger.debug(f"typing function {function}")
         if not function.has_args():
             continue
 
@@ -293,6 +301,13 @@ def set_functions_type(functions: dict, force: bool = True):
             idaapi.apply_tinfo(function.ea, func_tinfo, idaapi.TINFO_DEFINITE)
 
 
+def move_struc_to_symless_dir(name):
+    global STRUC_DIR
+    if STRUC_DIR is None:
+        STRUC_DIR = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_STRUCTS)
+    STRUC_DIR.rename(name, "symless/" + name)
+
+
 # Generate structures from model
 def generate_structs(ctx: model.context_t) -> int:
 
@@ -302,8 +317,10 @@ def generate_structs(ctx: model.context_t) -> int:
 
     # generate empty strucs to be used as types
     for mod in ctx.get_models():
+        utils.logger.debug(f"Generating empty {mod.get_name()}")
         if not mod.is_empty():
             idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
+            move_struc_to_symless_dir(mod.get_name())
 
     # type functions
     set_allocators_type(ctx.allocators)
