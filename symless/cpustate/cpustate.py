@@ -740,8 +740,6 @@ def function_execution_flow(
 
         for insn in read_basic_block_instructions(flow[node]):
 
-            params.injector.update_state(state, insn)
-
             # propagate in callee ?
             callee = None
             (propagate, is_call, callee_addr) = should_propagate_in_callee(insn, state, params)
@@ -756,6 +754,8 @@ def function_execution_flow(
 
                     if params.has_function(callee_addr):
                         validate_passthrough_args(state, params.get_function(callee_addr), is_call)
+
+            params.injector.update_state(state, insn)
 
             yield insn.ea, state
 
