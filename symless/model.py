@@ -9,6 +9,7 @@ import symless.config as config
 import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
 import symless.utils as utils
+from symless.cpustate import mem_t
 
 
 # from most interesting to last (for merge decisions)
@@ -47,6 +48,13 @@ class model_t:
             self.total_xrefs = 0  # sum of all virtual functions (data) xrefs count
         else:
             self.vtables = dict()  # offset -> list of vtable_sid
+            self.members_names = []
+
+    def get_guessed_names(self):
+        if self.is_vtable():
+            return []
+        else:
+            return self.members_names
 
     # add struct member
     def add_member(self, offset: int, size: int) -> bool:
@@ -75,6 +83,15 @@ class model_t:
     def add_operand(self, offset: int, ea: int, n: int, shift: int):
         # TODO handle the fact that same operand can be applied to multiple members of the same struct
         self.operands[(ea, n)] = (shift, offset)
+
+    def guess_member_name(self, target: mem_t, offset: int):
+        # state.get_
+        name_target = idaapi.get_name(target.addr)
+        if name_target is not None:
+            utils.logger.debug(
+                f"name = {name_target} addr = {hex(target.addr)} offset={hex(offset)}"
+            )
+            self.members_names += [(offset, name_target)]
 
     # sorted list of (offset, vtable_sid)
     def get_vtables(self):
@@ -654,7 +671,7 @@ def handle_access(state: cpustate.state_t, ctx: context_t):
             offset = cpustate.ctypes.c_int32(disp.offset + cur.shift).value
             if cur.shift < 0 or offset < 0:
                 continue
-
+            model: model_t
             model = ctx.models[cur.sid]
             if (model.size > 0 and cur.shift >= model.size) or not model.add_member(
                 offset, disp.nbytes
@@ -689,10 +706,13 @@ def handle_write(ea: int, state: cpustate.state_t, ctx: context_t):
 
             vtable_ea = target.get_val()
             vtbl_size = ida_utils.vtable_size(vtable_ea)
+            model: model_t
+            model = ctx.models[cur.sid]
+
             if vtbl_size == 0:  # Not a vtable
+                model.guess_member_name(target, offset)
                 continue
 
-            model = ctx.models[cur.sid]
             if model.is_vtable():
                 utils.logger.warning(
                     "propagation found %s having another vtable (0x%x) loaded at 0x%x. Ignoring.."

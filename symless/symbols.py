@@ -220,9 +220,21 @@ def last_chance_name_recovery(ctx: model.context_t, names: set):
             names.add(objname)
 
 
+def name_struc_members(ctx: model.context_t):
+    for mod in ctx.get_models():
+        members_names = mod.get_guessed_names()
+        for i in range(len(members_names)):
+            elt = members_names[i]
+            members_names[i] = (
+                elt[0],
+                get_method_name_from_signature(ida_utils.demangle(elt[1])),
+            )
+
+
 # name structures using symbols
 def name_structures(ctx: model.context_t):
     names = recover_names_from_vtables(ctx)
     recover_names_from_ctors(ctx, names)
     last_chance_name_recovery(ctx, names)
     recover_virtual_functions_names(ctx)
+    name_struc_members(ctx)

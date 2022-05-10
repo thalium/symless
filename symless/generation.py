@@ -103,6 +103,8 @@ def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
         # mark vtable ptrs
         mark_vtable_ptrs(model)
 
+        set_guessed_name_members(model, struc, ctx)
+
     # TODO possible upgrade: if stroff exists, replace by struc returned by less_derived(current, existing)
 
     # apply struc offsets on operands
@@ -135,6 +137,13 @@ def set_struc_comment(model: model.model_t, sid: int):
 
 def has_struc_comment(sid: int) -> bool:
     return idaapi.get_struc_cmt(sid, False) is not None
+
+
+# set
+def set_guessed_name_members(model: model.model_t, struc: idaapi.struc_t, ctx: model.context_t):
+
+    for (offset, name) in model.get_guessed_names():
+        idaapi.set_member_name(struc, offset, name)
 
 
 # set type & name of struc vtable ptrs
