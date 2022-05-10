@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import idaapi
 
 import symless.ida_utils as ida_utils
@@ -7,7 +9,7 @@ import symless.model as model
 
 
 # convert an existing struct to a model
-def from_structure(struc: idaapi.struc_t, ea: int = None) -> (model.model_t, model.context_t):
+def from_structure(struc: idaapi.struc_t, ea: int = None) -> Tuple[model.model_t, model.context_t]:
     out = model.model_t(-1, ea, type=model.model_type.STRUCTURE_UKWN_SIZE)
     out.set_name(idaapi.get_struc_name(struc.id))
 

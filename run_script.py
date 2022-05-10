@@ -5,6 +5,7 @@ import string
 import subprocess
 import sys
 import tempfile
+from typing import List, Tuple
 
 
 def stderr_print(line: str):
@@ -20,7 +21,7 @@ def unquote(path: str) -> str:
 
 
 # find idat executables
-def find_idat() -> (str, str):
+def find_idat() -> Tuple[str, str]:
     ida_dir = None
 
     # user defined IDA path
@@ -59,7 +60,7 @@ def find_idat() -> (str, str):
 
 
 # craft IDA batch command
-def craft_ida_command(idat: str, idb: str, script: str, script_args: [str]) -> (str, str):
+def craft_ida_command(idat: str, idb: str, script: str, script_args: List[str]) -> Tuple[str, str]:
     exec_name = os.path.basename(idb).split(".")[0]
     log_file = tempfile.mktemp(prefix=f"{exec_name}_", suffix=".log")
 
@@ -89,7 +90,7 @@ def run_ida_batchmode(idat: str, filepath: str) -> int:
 
 
 # Create .idb from 32 bits executable or .i64 from 64 bits exe
-def make_idb(ida_install: tuple, filepath: str) -> (str, int):
+def make_idb(ida_install: tuple, filepath: str) -> Tuple[str, int]:
     if run_ida_batchmode(ida_install[0], filepath) == 0:
         return (f"{filepath}.idb", 0)
 
@@ -111,7 +112,7 @@ def is_idb(filename: str) -> bool:
     return filename.split(".")[-1] in ("i64", "idb")
 
 
-def run_ida(ida_install: tuple, input_file: str, script: str, script_args: [str]) -> bool:
+def run_ida(ida_install: tuple, input_file: str, script: str, script_args: List[str]) -> bool:
     if not is_idb(input_file):
         print("Creating IDA database from binary %s" % input_file)
         (idb_file, ret_code) = make_idb(ida_install, input_file)
@@ -172,7 +173,7 @@ def run_ida(ida_install: tuple, input_file: str, script: str, script_args: [str]
     return code == 0
 
 
-def run_script(script: str, input_file: str, args: [str] = None) -> int:
+def run_script(script: str, input_file: str, args: List[str] = None) -> int:
     ida_install = find_idat()
     if ida_install is None:
         return 1

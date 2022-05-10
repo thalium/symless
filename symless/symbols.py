@@ -1,4 +1,5 @@
 import re
+from typing import Tuple
 
 import idaapi
 
@@ -47,13 +48,13 @@ def get_method_name_from_signature(signature: str) -> str:
 
 
 # get (class, parent_class) from vtable label
-def get_classnames_from_vtable(vtable_ea: int) -> (str, str):
+def get_classnames_from_vtable(vtable_ea: int) -> Tuple[str, str]:
     if arch.is_elf():
         return get_classnames_from_vtable_gcc(vtable_ea)
     return get_classnames_from_vtable_msvc(vtable_ea)
 
 
-def get_classnames_from_vtable_gcc(vtable_ea: int) -> (str, str):
+def get_classnames_from_vtable_gcc(vtable_ea: int) -> Tuple[str, str]:
     ptr_size = ida_utils.get_ptr_size()
 
     # use vtable symbol
@@ -75,7 +76,7 @@ def get_classnames_from_vtable_gcc(vtable_ea: int) -> (str, str):
     return (None, None)
 
 
-def get_classnames_from_vtable_msvc(vtable_ea: int) -> (str, str):
+def get_classnames_from_vtable_msvc(vtable_ea: int) -> Tuple[str, str]:
     vtbl_name = ida_utils.demangle(idaapi.get_name(vtable_ea))
 
     if vtbl_name is None or "::" not in vtbl_name:

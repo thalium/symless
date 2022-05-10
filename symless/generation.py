@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import ida_dirtree
 import idaapi
 import idc
@@ -245,7 +247,9 @@ def set_allocators_type(allocators: list):
 
 
 # get function type, create default one if none
-def get_or_create_fct_type(fea: int, default_cc: int) -> (idaapi.tinfo_t, idaapi.func_type_data_t):
+def get_or_create_fct_type(
+    fea: int, default_cc: int
+) -> Tuple[idaapi.tinfo_t, idaapi.func_type_data_t]:
     func_tinfo = idaapi.tinfo_t()
     func_data = idaapi.func_type_data_t()
 

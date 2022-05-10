@@ -1,6 +1,7 @@
 import bisect
 import collections
 import enum
+from typing import List, Tuple
 
 import idaapi
 import idautils
@@ -387,7 +388,7 @@ class context_t:
         model.sid = self.next_sid()
         self.models.append(model)
 
-    def get_models(self):
+    def get_models(self) -> List[model_t]:
         i, length = 0, len(self.models)
         while i < length:
             if isinstance(self.models[i], model_t):
@@ -526,7 +527,7 @@ def insert_struct_member(members: list, offset: int, size: int):
 """ Effective vtable selection """
 
 # count of xrefs to vtable functions
-def vtable_ref_count(vtable_ea) -> (int, int):
+def vtable_ref_count(vtable_ea) -> Tuple[int, int]:
     count, size = 0, 0
     for fea in ida_utils.vtable_members(vtable_ea):
         count += len(ida_utils.get_data_references(fea))
@@ -782,7 +783,7 @@ class allocation_type(enum.Enum):
 # return True if the function is an allocator wrapper, otherwise builds the model
 def analyze_allocator(
     func: idaapi.func_t, allocator: config.allocator_t, call_ea: int, ctx: context_t
-) -> (bool, tuple):
+) -> Tuple[bool, tuple]:
     atype = allocation_type.BEFORE_ALLOCATION
     params = cpustate.propagation_param_t(depth=0)
 
@@ -868,7 +869,7 @@ def analyze_allocator_heirs(allocator: config.allocator_t, ctx: context_t):
 
 # Start building the model & locate memory allocators
 # from the given entry points (list of allocator functions)
-def analyze_allocations(imports: [], ctx: context_t):
+def analyze_allocations(imports: List[config.allocator_t], ctx: context_t):
     for i in imports:
         utils.logger.debug(i)
         analyze_allocator_heirs(i, ctx)
@@ -877,7 +878,7 @@ def analyze_allocations(imports: [], ctx: context_t):
 """ Ctors & dtors analysis (cpp classes only) """
 
 # is given function a ctor/dtor (does it load a vtable into a class given as first arg)
-def is_ctor(func: idaapi.func_t, load_addr: int) -> (bool, int):
+def is_ctor(func: idaapi.func_t, load_addr: int) -> Tuple[bool, int]:
     state = cpustate.state_t()
     params = cpustate.propagation_param_t(depth=0)
     cpustate.set_argument(cpustate.get_object_cc(), state, 0, cpustate.sid_t(0))
