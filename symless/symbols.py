@@ -7,6 +7,7 @@ import symless.conflict as conflict
 import symless.cpustate.arch as arch
 import symless.ida_utils as ida_utils
 import symless.model as model
+import symless.utils as utils
 
 re_struc_name_invalids = re.compile(r"[\s\*&]")
 
@@ -212,13 +213,38 @@ def recover_virtual_functions_names(ctx: model.context_t):
 # recover name from ctor_ea for all unamed objects
 def last_chance_name_recovery(ctx: model.context_t, names: set):
     for mod in ctx.get_models():
-        if mod.has_name() or mod.ctor_ea is None:
+
+        if mod.has_name():
             continue
 
-        objname = get_classname_from_ctor(ida_utils.demangle(idaapi.get_name(mod.ctor_ea)))
-        if objname is not None and objname not in names:
-            mod.set_name(objname)
+        utils.logging.debug(f"{mod} {mod.has_name()} {[hex(x) for x in mod.ea]}")
+
+        # Rename the struc with the name of the first func containing its allocator
+        # Far from being perferct but does the trick sometimes and is not worse than nothing in other cases
+        if mod.ctor_ea is not None:
+            objname = get_classname_from_ctor(ida_utils.demangle(idaapi.get_name(mod.ctor_ea)))
+            if objname is not None and objname not in names:
+                mod.set_name(objname)
+                names.add(objname)
+                continue
+
+        if mod.ctor_ea is None:
+            func = idaapi.get_func(mod.ea[0])
+            if func is None:
+                continue
+            objname = get_method_name_from_signature(
+                ida_utils.demangle(idaapi.get_func_name(func.start_ea))
+            )
+            if objname is None or objname.startswith("sub_"):
+                continue
+            nbStrucSameName = 1
+            original_objname = objname
+            while objname in names:
+                objname = "%s%d" % (original_objname, nbStrucSameName)
+                nbStrucSameName += 1
+            mod.set_name("struc_" + objname)
             names.add(objname)
+            continue
 
 
 def name_struc_members(ctx: model.context_t):
