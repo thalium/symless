@@ -219,7 +219,7 @@ class BuildHandler(idaapi.action_handler_t):
 def injector(state: cpustate.state_t, ea: int, target_ea: int, target: str, value):
     if ea == target_ea:
         state.set_register_str(target, value)
-
+        utils.logger.debug(f"target reached {target} {value} new state => {state}")
         # also set previous value, for when it is accessed for dst operand
         state.set_register_str(target, value, 1)
 

@@ -673,6 +673,7 @@ def handle_access(state: cpustate.state_t, ctx: context_t):
 def handle_write(ea: int, state: cpustate.state_t, ctx: context_t):
     ptr_size = ida_utils.get_ptr_size()
     for write in state.writes:
+        utils.logger.debug(write)
         disp = write.disp
         target = write.src
         cur = state.get_previous_register(disp.reg)
@@ -740,6 +741,7 @@ def handle_read(state: cpustate.state_t, ctx: context_t):
 
 # handle new cpu state
 def handle_state(ea: int, state: cpustate.state_t, ctx: context_t):
+    utils.logger.debug(f"handle_state {hex(ea)} {state}")
     handle_access(state, ctx)
     handle_write(ea, state, ctx)
     handle_read(state, ctx)

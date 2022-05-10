@@ -70,7 +70,9 @@ class allocator_t:
         return isinstance(other, allocator_t) and self.ea == other.ea
 
     def __repr__(self):
-        return f"[{self.ea:x}] - {ida_utils.demangle(idaapi.get_name(self.ea))} ({self.get_name()})"
+        return (
+            f"[0x{self.ea:x}] - {ida_utils.demangle(idaapi.get_name(self.ea))} ({self.get_name()})"
+        )
 
 
 # malloc like function, takes one size parameter and returns memory space

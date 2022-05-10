@@ -389,7 +389,7 @@ class write_t:
         self.src = src
 
     def __repr__(self):
-        return "%r=%r" % (self.disp, self.src)
+        return "0x%x %r=%r" % (self.ea, self.disp, self.src)
 
 
 # memory read
