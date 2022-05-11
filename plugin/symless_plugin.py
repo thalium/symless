@@ -1,11 +1,27 @@
+import importlib
 import os
 
 import idaapi
 
-from symless import conflict, existing, generation, model, symbols
+import symless
+from symless import conflict, existing, generation, ida_utils, model, symbols
 from symless.cpustate import arch, cpustate
 
 RESOURCES_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "symless", "resources"))
+
+
+def reload_plugin():
+
+    importlib.reload(symless)
+    importlib.reload(cpustate)
+    importlib.reload(conflict)
+    importlib.reload(arch)
+    importlib.reload(existing)
+    importlib.reload(generation)
+    importlib.reload(model)
+    importlib.reload(symbols)
+    importlib.reload(ida_utils)
+
 
 # Propagate & build structure action
 class BuildHandler(idaapi.action_handler_t):
@@ -187,7 +203,7 @@ class SymlessPlugin(idaapi.plugin_t):
     comment = "Structure information propagation & building"
     help = "Propagate one struct information through assembly code"
     wanted_name = "Symless"
-    wanted_hotkey = ""
+    wanted_hotkey = "ctrl+shift+s"
 
     def init(self):
         self.uihook = PopUpHook()
@@ -195,6 +211,7 @@ class SymlessPlugin(idaapi.plugin_t):
         return idaapi.PLUGIN_KEEP
 
     def run(self, arg):
+        reload_plugin()
         pass
 
     def term(self):
