@@ -28,14 +28,16 @@ def find_idat() -> (str, str):
         ida_dir = os.path.abspath(unquote(os.environ["IDA_DIR"]))
     else:
         if sys.platform == "win32":
-            base = R"C:\Program Files\IDA Pro 7."
+            bases = [R"C:\Program Files\IDA Pro 7."]
         else:
-            base = "%s/idapro-7." % os.environ["HOME"]
-
-        for i in range(5, 8):
-            current = "%s%d" % (base, i)
-            if os.path.exists(current):
-                ida_dir = current
+            bases = ["%s/idapro-7." % os.environ["HOME"], "%s/Tools/idapro-7." % os.environ["HOME"]]
+        bestversion = 0
+        for base in bases:
+            for i in range(5, 9):
+                current = "%s%d" % (base, i)
+                if os.path.exists(current) and i > bestversion:
+                    ida_dir = current
+                    bestversion = i
 
     if ida_dir is None:
         stderr_print("Please specify an IDA installation location using IDA_DIR env")
