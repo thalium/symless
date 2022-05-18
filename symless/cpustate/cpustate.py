@@ -694,17 +694,26 @@ class propagation_param_t:
 
 # Returns (should_propagate, is_call, callee_addr)
 def should_propagate_in_callee(insn: idaapi.insn_t, state: state_t, params: propagation_param_t):
+
     is_call = insn.itype in INSN_CALLS
     if not is_call and insn.itype not in INSN_UNCONDITIONAL_JUMPS:
         return (False, False, None)
 
-    op = insn.ops[0]
-    if op.type not in [idaapi.o_mem, idaapi.o_far, idaapi.o_near]:
-        return (False, is_call, op.addr)
+    op: idaapi.op_t = insn.ops[0]
 
-    addr = op.addr
-    if op.type == idaapi.o_mem:
-        addr = ida_utils.dereference_pointer(addr)
+    if op.type == idaapi.o_reg:
+        addr = state.get_register(op.reg)
+        if isinstance(addr, mem_t):
+            addr: mem_t
+            addr = addr.addr
+        else:
+            return (False, is_call, op.addr)
+    elif op.type in [idaapi.o_mem, idaapi.o_far, idaapi.o_near]:
+        addr = op.addr
+        if op.type == idaapi.o_mem:
+            addr = ida_utils.dereference_pointer(addr)
+    else:
+        return (False, is_call, op.addr)
 
     if not params.should_propagate(state, addr, False, not is_call):
         return (False, is_call, addr)

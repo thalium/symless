@@ -33,6 +33,7 @@ class model_t:
 
         self.type = type
         self.members = list()  # sorted list of (offset, size)
+        self.members_value = dict()  # dict of (offset) -> (type)
         self.operands = dict()  # (insn.ea, op_index) -> (shift, offset)
         self.symname = None
 
@@ -93,6 +94,17 @@ class model_t:
                 f"name = {name_target} addr = {hex(target.addr)} offset={hex(offset)}"
             )
             self.members_names += [(offset, name_target)]
+
+    def set_member_value(self, offset, elt):
+        utils.logger.debug(f"set member value {offset} {elt}")
+        self.members_value[offset] = elt
+
+    def get_member_value(self, offset):
+        utils.logger.debug(f"get member value {offset}")
+        if offset in self.members_value:
+            utils.logger.debug(f"res = {self.members_value[offset]}")
+            return self.members_value[offset]
+        return None
 
     # sorted list of (offset, vtable_sid)
     def get_vtables(self):
@@ -720,6 +732,7 @@ def handle_write(ea: int, state: cpustate.state_t, ctx: context_t):
 
             if vtbl_size == 0:  # Not a vtable
                 model.guess_member_name(target, offset)
+                model.set_member_value(offset, target)
                 continue
 
             if model.is_vtable():
@@ -763,11 +776,14 @@ def handle_read(state: cpustate.state_t, ctx: context_t):
             offset = cpustate.ctypes.c_int32(disp.offset + src.shift).value
 
             vtable_sid = model.get_vtable(offset)  # current vtable
-            if vtable_sid < 0:
+            if vtable_sid >= 0:
+                # vtable ptr was read, inject it in state
+                state.set_register(read.dst, cpustate.sid_t(vtable_sid))
                 continue
 
-            # vtable ptr was read, inject it in state
-            state.set_register(read.dst, cpustate.sid_t(vtable_sid))
+            member_value = model.get_member_value(offset)
+            if member_value is not None:
+                state.set_register(read.dst, member_value)
 
 
 # handle new cpu state
