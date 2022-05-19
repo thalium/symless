@@ -1,6 +1,6 @@
 import idaapi
 
-import symless.utils as utils
+import symless.utils.utils as utils
 from symless import cpustate
 from symless.config.custom_hooks import call_hooks
 

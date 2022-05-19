@@ -4,7 +4,7 @@ from typing import Tuple
 
 import idaapi
 
-import symless.utils as utils
+import symless.utils.utils as utils
 from symless import conflict, existing, generation, ida_utils, model, symbols
 from symless.cpustate import INSN_CALLS, arch, cpustate
 

@@ -7,7 +7,7 @@ class Settings:
 
         self.settings = {}
         with open(
-            os.path.join(os.path.dirname(os.path.realpath(__file__)), "config/settings.json"), "rb"
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), "settings.json"), "rb"
         ) as settings_file:
             self.settings = json.load(settings_file)
         self.LOG_LEVEL = 30

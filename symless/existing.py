@@ -3,9 +3,9 @@ from typing import Tuple
 
 import idaapi
 
-import symless.ida_utils as ida_utils
 import symless.model as model
-import symless.utils as utils
+import symless.utils.ida_utils as ida_utils
+import symless.utils.utils as utils
 
 """ From existing structure back to model """
 

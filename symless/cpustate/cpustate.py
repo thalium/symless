@@ -7,7 +7,7 @@ import idautils
 import symless.cpustate.arch as arch
 import symless.hookalls as hookalls
 import symless.ida_utils as ida_utils
-import symless.utils as utils
+import symless.utils.utils as utils
 from symless.cpustate import *
 
 # max functions depth to propagate a structure

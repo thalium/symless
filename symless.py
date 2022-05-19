@@ -18,7 +18,7 @@ def ida_main():
     parser.add_argument("--config", type=str, help="config file")
     parser.add_argument("--prefix", type=str, default="", help="log prefix")
     args = parser.parse_args(idc.ARGV[1:])
-    symless_analyse(args.config)
+    start_analysis(args.config)
 
     idc.qexit(0)
 
@@ -71,6 +71,6 @@ if __name__ == "__main__":
         cmd_main()  # script run from command line
 
     else:
-        from symless.symless_action import symless_analyse
+        from symless.main import start_analysis
 
         ida_main()  # script run from IDA

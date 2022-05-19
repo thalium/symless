@@ -5,9 +5,9 @@ import math
 import idaapi
 
 import symless.cpustate.cpustate as cpustate
-import symless.ida_utils as ida_utils
 import symless.model as model
-import symless.utils as utils
+import symless.utils.ida_utils as ida_utils
+import symless.utils.utils as utils
 
 """ Within model conflicts resolution """
 

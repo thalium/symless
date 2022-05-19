@@ -4,10 +4,10 @@ import os
 import idaapi
 
 import symless
-import symless.settings
-import symless.utils
-from symless import symless_action
-from symless.handlers import PopUpHook
+import symless.config.settings as settings
+import symless.main as symless_main
+import symless.utils.utils as utils
+from symless.plugin.handlers import PopUpHook
 
 
 # Symless plugin
@@ -21,8 +21,8 @@ class SymlessPlugin(idaapi.plugin_t):
     def load(self):
         self.uihook = PopUpHook()
         self.uihook.hook()
-        symless.settings.settings = symless.settings.load_settings()
-        symless.utils.logger = symless.utils.set_logger()
+        settings.settings = settings.load_settings()
+        utils.logger = utils.set_logger()
 
     def init(self):
         self.load()
@@ -43,7 +43,7 @@ class SymlessPlugin(idaapi.plugin_t):
         self.uihook.unhook()
 
         importlib.reload(symless)
-        importlib.reload(symless.settings)
+        importlib.reload(symless.config.settings)
         importlib.reload(symless.cpustate)
         importlib.reload(symless.cpustate.arch)
         importlib.reload(symless.cpustate.cpustate)
@@ -52,16 +52,16 @@ class SymlessPlugin(idaapi.plugin_t):
         importlib.reload(symless.generation)
         importlib.reload(symless.model)
         importlib.reload(symless.symbols)
-        importlib.reload(symless.ida_utils)
-        importlib.reload(symless.symless_action)
-        importlib.reload(symless.utils)
+        importlib.reload(symless.utils.ida_utils)
+        importlib.reload(symless.main)
+        importlib.reload(symless.utils.utils)
         importlib.reload(symless.allocators)
-        importlib.reload(symless.handlers)
+        importlib.reload(symless.plugin.handlers)
         importlib.reload(symless.hookalls)
 
         self.load()
 
-        symless_action.symless_analyse(
+        symless_main.start_analysis(
             os.path.join(
                 os.path.dirname(os.path.realpath(__file__)), "../symless/config/imports.csv"
             )

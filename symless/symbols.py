@@ -7,7 +7,7 @@ import symless.conflict as conflict
 import symless.cpustate.arch as arch
 import symless.ida_utils as ida_utils
 import symless.model as model
-import symless.utils as utils
+import symless.utils.utils as utils
 
 re_struc_name_invalids = re.compile(r"[\s\*&]")
 

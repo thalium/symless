@@ -238,7 +238,7 @@ def vtable_size(addr: int) -> int:
 # scans given segment for vtables
 # WARN: will not return vtables only used at virtual bases (vbase)
 def get_all_vtables_in(seg: idaapi.segment_t):
-    utils.logger.debug(
+    utils.logger.info(
         "scanning segment %s[%x, %x] for vtables"
         % (idaapi.get_segm_name(seg), seg.start_ea, seg.end_ea)
     )

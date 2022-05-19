@@ -9,7 +9,7 @@ import idautils
 import symless.allocators as allocators
 import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
-import symless.utils as utils
+import symless.utils.utils as utils
 from symless.cpustate import mem_t
 
 

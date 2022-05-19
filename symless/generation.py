@@ -5,10 +5,10 @@ import idc
 
 import symless.cpustate.cpustate as cpustate
 import symless.existing as existing
-import symless.ida_utils as ida_utils
 import symless.model as model
 import symless.symbols as symbols
-import symless.utils as utils
+import symless.utils.ida_utils as ida_utils
+import symless.utils.utils as utils
 
 STRUC_DIR: idaapi.dirtree_t
 STRUC_DIR = None

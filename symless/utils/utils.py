@@ -1,6 +1,6 @@
 import logging
 
-import symless.settings as settings
+import symless.config.settings as settings
 
 logger = None
 
