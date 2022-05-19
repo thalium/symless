@@ -1,6 +1,5 @@
 from typing import Dict, Tuple
 
-import ida_dirtree
 import idaapi
 import idc
 
@@ -11,7 +10,7 @@ import symless.model as model
 import symless.symbols as symbols
 import symless.utils as utils
 
-STRUC_DIR: ida_dirtree.dirtree_t
+STRUC_DIR: idaapi.dirtree_t
 STRUC_DIR = None
 
 # Apply struc type on operand
@@ -319,8 +318,22 @@ def set_functions_type(functions: Dict[int, model.function_t], force: bool = Tru
 def move_struc_to_symless_dir(name):
     global STRUC_DIR
     if STRUC_DIR is None:
-        STRUC_DIR = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_STRUCTS)
+        STRUC_DIR = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
+
     STRUC_DIR.rename(name, "symless/" + name)
+
+
+def make_symless_dir():
+    global STRUC_DIR
+    if STRUC_DIR is None:
+        STRUC_DIR = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
+
+    # Create symless dir if necessary
+    struc_dir: idaapi.dirtree_t = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
+    ite = idaapi.dirtree_iterator_t()
+    ok = struc_dir.findfirst(ite, "symless")
+    if not ok:
+        struc_dir.mkdir("symless")
 
 
 # Generate structures from model
