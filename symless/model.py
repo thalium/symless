@@ -6,7 +6,7 @@ from typing import List, Tuple
 import idaapi
 import idautils
 
-import symless.config as config
+import symless.allocators as allocators
 import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
 import symless.utils as utils
@@ -379,7 +379,7 @@ class function_t:
 class context_t:
     def __init__(self):
         self.models = []  # list of model_t, may contain Nones for discarded models
-        self.allocators = set()  # set of config.allocator_t
+        self.allocators = set()  # set of allocators.allocator_t
         self.all_operands = dict()  # (insn.ea, op_index) -> (op_boundary, set of models_sids)
         self.vtables = dict()  # vtable_ea -> model_t
         self.functions = dict()  # ea -> function_t
@@ -439,7 +439,7 @@ class context_t:
         self.vtables[ea] = vtable
         return vtable
 
-    def add_allocator(self, allocator: config.allocator_t):
+    def add_allocator(self, allocator: allocators.allocator_t):
         self.allocators.add(allocator)
 
     def add_operand_for(self, ea: int, n: int, boundary: int, model: model_t):
@@ -782,7 +782,7 @@ class allocation_type(enum.Enum):
 # Analyze function which calls the given allocator
 # return True if the function is an allocator wrapper, otherwise builds the model
 def analyze_allocator(
-    func: idaapi.func_t, allocator: config.allocator_t, call_ea: int, ctx: context_t
+    func: idaapi.func_t, allocator: allocators.allocator_t, call_ea: int, ctx: context_t
 ) -> Tuple[bool, tuple]:
     atype = allocation_type.BEFORE_ALLOCATION
     params = cpustate.propagation_param_t(depth=0)
@@ -794,15 +794,15 @@ def analyze_allocator(
         if atype == allocation_type.BEFORE_ALLOCATION and ea == call_ea:
             action, size = allocator.on_call(state)
 
-            if action == config.alloc_action_t.JUMP_TO_ALLOCATOR:
+            if action == allocators.alloc_action_t.JUMP_TO_ALLOCATOR:
                 return (True, size)
 
-            if action == config.alloc_action_t.WRAPPED_ALLOCATOR:
+            if action == allocators.alloc_action_t.WRAPPED_ALLOCATOR:
                 atype = allocation_type.SIZE_PASSTHROUGH
                 wrapper_args = size
 
             # a struc/buffer is allocated
-            elif action == config.alloc_action_t.STATIC_ALLOCATION:
+            elif action == allocators.alloc_action_t.STATIC_ALLOCATION:
                 model = model_t(size, ea)
                 ctx.add_model(model)
                 cpustate.set_ret_value(state, cpustate.sid_t(model.sid, 0))
@@ -836,7 +836,7 @@ def analyze_allocator(
 
 
 # Analyze the children of a memory allocator
-def analyze_allocator_heirs(allocator: config.allocator_t, ctx: context_t):
+def analyze_allocator_heirs(allocator: allocators.allocator_t, ctx: context_t):
     if allocator in ctx.allocators:  # avoid inifine recursion if crossed xrefs
         return
 
@@ -869,7 +869,7 @@ def analyze_allocator_heirs(allocator: config.allocator_t, ctx: context_t):
 
 # Start building the model & locate memory allocators
 # from the given entry points (list of allocator functions)
-def analyze_allocations(imports: List[config.allocator_t], ctx: context_t):
+def analyze_allocations(imports: List[allocators.allocator_t], ctx: context_t):
     for i in imports:
         utils.logger.debug(i)
         analyze_allocator_heirs(i, ctx)
@@ -1004,7 +1004,7 @@ def analyze_ctors(ctx: context_t):
 
 # Model generation
 def generate_model(config_path: str) -> context_t:
-    imports = config.get_entry_points(config_path)
+    imports = allocators.get_entry_points(config_path)
     if imports is None:
         return None
 

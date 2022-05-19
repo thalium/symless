@@ -5,6 +5,7 @@ import idaapi
 import idautils
 
 import symless.cpustate.arch as arch
+import symless.hookalls as hookalls
 import symless.ida_utils as ida_utils
 import symless.utils as utils
 from symless.cpustate import *
@@ -444,7 +445,7 @@ def process_instruction(state: state_t, insn: idaapi.insn_t):
 
 
 # read all instructions from input basic block
-def read_basic_block_instructions(bb: idaapi.qbasic_block_t):
+def read_basic_block_instructions(bb: idaapi.qbasic_block_t) -> idaapi.insn_t:
     ea = bb.start_ea
     while ea < bb.end_ea:
         # skip non-code instructions
@@ -745,7 +746,10 @@ def function_execution_flow(
             (propagate, is_call, callee_addr) = should_propagate_in_callee(insn, state, params)
             if callee_addr is not None:
                 state.call_to = callee_addr
-                if propagate:
+
+                if hookalls.hook_call(callee_addr, state, insn):
+                    pass
+                elif propagate:
                     callee = idaapi.get_func(callee_addr)
                 elif is_call:
                     # Don't spread in callee, set call_t value in rax

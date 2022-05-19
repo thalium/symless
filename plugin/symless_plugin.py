@@ -55,8 +55,9 @@ class SymlessPlugin(idaapi.plugin_t):
         importlib.reload(symless.ida_utils)
         importlib.reload(symless.symless_action)
         importlib.reload(symless.utils)
-        importlib.reload(symless.config)
+        importlib.reload(symless.allocators)
         importlib.reload(symless.handlers)
+        importlib.reload(symless.hookalls)
 
         self.load()
 
