@@ -168,7 +168,6 @@ def is_vtable_start(ea: int) -> int:
 
         # code loads the ea into a register
         if not is_vtable_load(xref):
-            utils.logger.debug(f"{hex(ea)} is not a vtable")
             return idaapi.BADADDR
 
         # value from ea is stored into a struct
@@ -178,12 +177,10 @@ def is_vtable_start(ea: int) -> int:
 
         # stored addr points to a functions ptrs array
         if vtable_size(stored_value) == 0:
-            utils.logger.debug(f"{hex(ea)} is not a vtable")
             return idaapi.BADADDR
 
         utils.logger.debug(f"{hex(ea)} is a vtable from {hex(stored_value)}")
         return stored_value
-    utils.logger.debug(f"{hex(ea)} is not a vtable")
     return idaapi.BADADDR
 
 

@@ -1,6 +1,7 @@
 import copy
 import ctypes
 import enum
+from typing import List
 
 import idaapi
 import idc
@@ -400,7 +401,7 @@ class read_t:
         self.dst = dst
 
     def __repr__(self):
-        return "%r=%r" % (X64_REGISTERS[self.dst], self.disp)
+        return "0x%x %r=%r" % (self.ea, X64_REGISTERS[self.dst], self.disp)
 
 
 # memory access
@@ -411,7 +412,7 @@ class access_t:
         self.key = key
 
     def __repr__(self):
-        return "%r" % self.key
+        return "0x%x  key = %r n = %r" % (self.ea, self.key, self.n)
 
 
 # function return value and address
@@ -483,9 +484,9 @@ class state_t:
         self.previous = registers_t()  # registers after computing previous insn
         self.registers = registers_t()  # registers after computing current insn
 
-        self.writes = []  # list of write_t
-        self.reads = []  # list of read_t
-        self.access = []  # list of access_t
+        self.writes: List[write_t] = []  # list of write_t
+        self.reads: List[read_t] = []  # list of read_t
+        self.access: List[access_t] = []  # list of access_t
 
         self.call_type = None
         self.call_to = None

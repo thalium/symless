@@ -11,7 +11,7 @@ def hook_call(callee_addr: int, state: cpustate.state_t, insn: idaapi.insn_t) ->
     for addr_call_hook, name_call_hook in call_hooks:
 
         if callee_addr == addr_call_hook or idaapi.get_name(callee_addr) == name_call_hook:
-            utils.logger.critical(f"hook {hex(addr_call_hook)}/{name_call_hook} at {hex(insn.ea)}")
+            utils.logger.debug(f"hook {hex(addr_call_hook)}/{name_call_hook} at {hex(insn.ea)}")
             regs_to_update = call_hooks[(addr_call_hook, name_call_hook)]
             for reg_str in regs_to_update:
                 state.set_register_str(reg_str, state.get_register_str(regs_to_update[reg_str]))

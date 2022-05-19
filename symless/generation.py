@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Dict, Tuple
 
 import ida_dirtree
 import idaapi
@@ -65,6 +65,7 @@ def get_model_ptr_tinfo(m: model.model_t) -> idaapi.tinfo_t:
 
 # Generate a new struc implementing given model
 def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
+    utils.logger.debug(f"generating content of struct {model.get_name()}")
     sid = idaapi.get_struc_id(model.get_name())
 
     if sid == idaapi.BADADDR:
@@ -278,7 +279,7 @@ def get_or_create_fct_type(
 
 
 # type functions crossed during state propagation
-def set_functions_type(functions: dict, force: bool = True):
+def set_functions_type(functions: Dict[int, model.function_t], force: bool = True):
     for function in functions.values():
         utils.logger.debug(f"typing function {function}")
         if not function.has_args():

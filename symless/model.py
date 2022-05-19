@@ -1,7 +1,7 @@
 import bisect
 import collections
 import enum
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import idaapi
 import idautils
@@ -374,14 +374,19 @@ class function_t:
             if current is not None:
                 yield (i, current[0], current[1])
 
+    def __repr__(self):
+        return f"model.function_t {hex(self.ea)}"
+
 
 # Record of models
 class context_t:
     def __init__(self):
+        self.models: List[model_t]
         self.models = []  # list of model_t, may contain Nones for discarded models
         self.allocators = set()  # set of allocators.allocator_t
         self.all_operands = dict()  # (insn.ea, op_index) -> (op_boundary, set of models_sids)
         self.vtables = dict()  # vtable_ea -> model_t
+        self.functions: Dict[int, function_t]
         self.functions = dict()  # ea -> function_t
 
     def add_model(self, model: model_t):
@@ -678,13 +683,16 @@ def handle_access(state: cpustate.state_t, ctx: context_t):
                 offset, disp.nbytes
             ):
                 continue
-
+            utils.logger.debug(
+                f"add_operand to {model.get_name()} at offset {hex(offset)} ea : {hex(access.ea)} n : {access.n} "
+            )
             model.add_operand(offset, access.ea, access.n, cur.shift)
 
             boundary = cpustate.ctypes.c_int32(disp.offset).value  # lower boundary
             if boundary >= 0:
                 boundary += disp.nbytes  # upper boundary
             ctx.add_operand_for(access.ea, access.n, boundary, model)
+            utils.logger.debug(f"add_operand for model {model}")
 
 
 # Handle writes to struc members
@@ -743,6 +751,8 @@ def handle_read(state: cpustate.state_t, ctx: context_t):
 
         # mov reg, [sid + offset]
         if isinstance(src, cpustate.sid_t):
+            utils.logger.debug(f"{read}")
+
             if disp.nbytes != ptr_size:
                 continue
 
@@ -762,7 +772,7 @@ def handle_read(state: cpustate.state_t, ctx: context_t):
 
 # handle new cpu state
 def handle_state(ea: int, state: cpustate.state_t, ctx: context_t):
-    utils.logger.debug(f"handle_state {hex(ea)} {state}")
+    utils.logger.log(5, f"handle_state {hex(ea)} {state}")
     handle_access(state, ctx)
     handle_write(ea, state, ctx)
     handle_read(state, ctx)

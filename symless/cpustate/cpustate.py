@@ -332,9 +332,9 @@ def check_types(effective: tuple, expected: tuple) -> bool:
 
 # dump insn & operands
 def dump_insn(insn: idaapi.insn_t, ops):
-    utils.logger.debug(insn_str(insn))
+    utils.logger.log(5, insn_str(insn))
     for op in ops:
-        utils.logger.debug("\t" + op_str(op))
+        utils.logger.log(5, "\t" + op_str(op))
 
 
 # handle zero-operand instructions
@@ -399,9 +399,9 @@ def handle_two_ops_insn(state: state_t, insn: idaapi.insn_t, ops):
 
 # pretty print state and insn
 def dbg_dump_state_insn(insn: state_t, ops: list, state: state_t):
-    utils.logger.debug("---------------------------------------------------------")
+    utils.logger.log(5, "---------------------------------------------------------")
     dump_insn(insn, ops)
-    utils.logger.debug(state)
+    utils.logger.log(5, state)
 
 
 # process one instruction & update current state
@@ -622,6 +622,9 @@ class function_t:
             return 0
         return self.args_count
 
+    def __repr__(self):
+        return f"cpustate.function_t {hex(self.ea)}"
+
 
 # Injector into state_t
 class injector_t:
@@ -711,6 +714,7 @@ def should_propagate_in_callee(insn: idaapi.insn_t, state: state_t, params: prop
     if callee is None or callee.start_ea != addr:
         return (False, is_call, addr)
 
+    utils.logger.debug(f"analyse call to  {hex(addr)}")
     return (True, is_call, addr)
 
 

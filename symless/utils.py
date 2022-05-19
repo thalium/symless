@@ -41,8 +41,12 @@ def set_logger():
     ch.setLevel(settings.settings.get_log_level())
 
     # create formatter
+    # formatter = logging.Formatter(
+    #    "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)s - %(funcName)20s() - %(message)s"
+    # )
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)s - %(funcName)20s() - %(message)s"
+        "{asctime} - {name} - {levelname:<8s} {filename:>15s}:{lineno:05} - {funcName:<30s} - {message}",
+        style="{",
     )
 
     # add formatter to ch

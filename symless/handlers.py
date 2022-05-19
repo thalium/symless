@@ -1,4 +1,5 @@
 import os
+import traceback
 from typing import Tuple
 
 import idaapi
@@ -206,7 +207,8 @@ class BuildHandler(idaapi.action_handler_t):
             utils.logger.info("Updated / created %d structures:" % len(context.models))
             for mod in context.get_models():
                 utils.logger.info("  - %s" % mod.get_name())
-
+        except Exception as e:
+            utils.logger.critical(repr(e) + "\n" + traceback.format_exc())
         finally:
             idaapi.hide_wait_box()
 
