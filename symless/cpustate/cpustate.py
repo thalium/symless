@@ -14,17 +14,6 @@ from symless.cpustate import *
 MAX_PROPAGATION_RECURSION = 100
 
 
-# get instructions operands + convert registers (al -> rax)
-def get_insn_ops(insn: idaapi.insn_t) -> list:
-    ops = list()
-    for op in insn.ops:
-        if op.type != idaapi.o_void:
-            if op.reg in X64_REG_ALIASES:
-                op.reg = X64_REG_ALIASES[op.reg]
-            ops.append(op)
-    return ops
-
-
 # ignore instruction
 def handle_ignore(state: state_t, *args):
     pass
@@ -406,7 +395,7 @@ def dbg_dump_state_insn(insn: state_t, ops: list, state: state_t):
 
 # process one instruction & update current state
 def process_instruction(state: state_t, insn: idaapi.insn_t):
-    ops = get_insn_ops(insn)
+    ops = ida_utils.get_insn_ops(insn)
     state.reset()
 
     op_len = len(ops)

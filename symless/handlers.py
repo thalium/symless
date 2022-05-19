@@ -5,7 +5,7 @@ from typing import Tuple
 import idaapi
 
 import symless.utils as utils
-from symless import conflict, existing, generation, model, symbols
+from symless import conflict, existing, generation, ida_utils, model, symbols
 from symless.cpustate import INSN_CALLS, arch, cpustate
 
 RESOURCES_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "symless", "resources"))
@@ -88,18 +88,19 @@ class StructureChooser(idaapi.Choose):
 def target_op_reg(ea: int, op_num: int) -> Tuple[int, idaapi.op_t]:
     insn = idaapi.insn_t()
     insn_len = idaapi.decode_insn(insn, ea)
+    nb_ops = ida_utils.get_len_insn_ops(insn)
 
-    if insn_len == 0 or op_num < 0 or op_num >= len(insn.ops):
-        return -1, None
+    if insn_len == 0 or op_num < 0 or op_num >= nb_ops:
+        return -1, None, 0
 
     op = insn.ops[op_num]
     if op.type == idaapi.o_reg:
-        return op.reg, op
+        return op.reg, op, nb_ops
 
     if op.type in [idaapi.o_phrase, idaapi.o_displ]:
-        return cpustate.x64_base_reg(insn, op), op
+        return cpustate.x64_base_reg(insn, op), op, nb_ops
 
-    return -1, None
+    return -1, None, 0
 
 
 # Hook to attach new action to popup menu
@@ -139,7 +140,7 @@ class PopUpHook(idaapi.UI_Hooks):
 # Propagate & build structure action
 class BuildHandler(idaapi.action_handler_t):
     def activate(self, ctx):
-        reg_id, op = target_op_reg(ctx.cur_ea, idaapi.get_opnum())
+        reg_id, op, nb_ops = target_op_reg(ctx.cur_ea, idaapi.get_opnum())
         if reg_id < 0:
             insn = idaapi.insn_t()
             idaapi.decode_insn(insn, ctx.cur_ea)
@@ -151,14 +152,7 @@ class BuildHandler(idaapi.action_handler_t):
             else:
                 return 0
         else:
-
-            # consider first operand to be the dst operand except if it is push
-            dst_op = op.n == 0
-            insn = idaapi.insn_t()
-            idaapi.decode_insn(insn, ctx.cur_ea)
-
-            if insn.itype == idaapi.NN_push:
-                dst_op = False
+            dst_op = op.n == 0 and nb_ops != 1
 
         # arch supported
         if not arch.is_arch_supported():
@@ -166,8 +160,8 @@ class BuildHandler(idaapi.action_handler_t):
             return 0
 
         # convert to full register
-        if reg_id in cpustate.X64_REG_ALIASES:
-            reg_id = cpustate.X64_REG_ALIASES[reg_id]
+        if reg_id in ida_utils.X64_REG_ALIASES:
+            reg_id = ida_utils.X64_REG_ALIASES[reg_id]
 
         reg = cpustate.reg_string(reg_id)
 
@@ -266,7 +260,7 @@ def propagate_struct(
 def current_op_reg() -> int:
     current_ea = idaapi.get_screen_ea()
     current_op = idaapi.get_opnum()
-    reg_id, _ = target_op_reg(current_ea, current_op)
+    reg_id, _, _ = target_op_reg(current_ea, current_op)
     return reg_id
 
 

@@ -7,6 +7,22 @@ import idc
 import symless.cpustate.cpustate as cpustate
 import symless.utils as utils
 
+# alias small registers on full-width registers
+X64_REG_ALIASES = {
+    16: 0,  # al  -> rax
+    17: 1,  # cl  -> rcx
+    18: 2,  # dl  -> rdx
+    19: 3,  # bl  -> rbx
+    20: 0,  # ah  -> rax
+    21: 1,  # ch  -> rcx
+    22: 2,  # dh  -> rdx
+    23: 3,  # bh  -> rbx
+    25: 5,  # bpl -> rbp
+    26: 6,  # sil -> rsi
+    27: 7,  # dil -> rdi
+}
+
+
 """ Imports utilities """
 
 
@@ -384,3 +400,28 @@ def get_bb(ea: int) -> idaapi.range_t:
             return idaapi.range_t(flow[i].start_ea, flow[i].end_ea)
 
     return None
+
+
+# get instructions operands + convert registers (al -> rax)
+def get_insn_ops(insn: idaapi.insn_t) -> list:
+    ops = list()
+    for index_op in range(get_len_insn_ops(insn)):
+        op = insn.ops[index_op]
+
+        if op.reg in X64_REG_ALIASES:
+            op.reg = X64_REG_ALIASES[op.reg]
+        ops.append(op)
+    return ops
+
+
+# Return once the first void is encoutered
+# Dont know if after the first void it could have other operands
+# If so, then need to return the indexes of ops no void
+def get_len_insn_ops(insn: idaapi.insn_t) -> int:
+    res = 0
+    for op in insn.ops:
+        if op.type != idaapi.o_void:
+            res += 1
+        else:
+            return res
+    return res

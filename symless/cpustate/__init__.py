@@ -117,22 +117,6 @@ def reg_string(reg) -> str:
     return X64_REGISTERS[reg]
 
 
-# alias small registers on full-width registers
-X64_REG_ALIASES = {
-    16: 0,  # al  -> rax
-    17: 1,  # cl  -> rcx
-    18: 2,  # dl  -> rdx
-    19: 3,  # bl  -> rbx
-    20: 0,  # ah  -> rax
-    21: 1,  # ch  -> rcx
-    22: 2,  # dh  -> rdx
-    23: 3,  # bh  -> rbx
-    25: 5,  # bpl -> rbp
-    26: 6,  # sil -> rsi
-    27: 7,  # dil -> rdi
-}
-
-
 INSN_MOVES = [idaapi.NN_mov, idaapi.NN_movups, idaapi.NN_movdqu]
 
 INSN_MATH = [idaapi.NN_add, idaapi.NN_or, idaapi.NN_sub]
