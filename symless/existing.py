@@ -1,19 +1,38 @@
+import pickle
 from typing import Tuple
 
 import idaapi
 
 import symless.ida_utils as ida_utils
 import symless.model as model
+import symless.utils as utils
 
 """ From existing structure back to model """
 
 
 # convert an existing struct to a model
 def from_structure(struc: idaapi.struc_t, ea: int = None) -> Tuple[model.model_t, model.context_t]:
-    out = model.model_t(-1, ea, type=model.model_type.STRUCTURE_UKWN_SIZE)
-    out.set_name(idaapi.get_struc_name(struc.id))
+    utils.logger.debug(f"{idaapi.get_struc_name(struc.id)} {hex(ea if ea is not None else 0)}")
+    model_context: model.context_t
+    with open(f"{idaapi.get_input_file_path()}_model.pickle", "rb") as f:
+        model_context = pickle.load(f)
 
-    context = model.context_t()
+    for m in model_context.models:
+        if m.sid_ida == struc.id:
+            # TODO : need to modify m if the structure has been changed in IDA "manually" by the user
+            # TODO : seems not good to reload the model_context for each structure. better to keep one model available everywhere ?
+            return (m, model_context)
+
+    return from_structure_old(struc, model_context, ea), model_context
+
+
+def from_structure_old(
+    struc: idaapi.struc_t, context: model.context_t, ea: int = None
+) -> Tuple[model.model_t, model.context_t]:
+
+    out = model.model_t(-1, ea, type=model.model_type.STRUCTURE_UKWN_SIZE)
+    out.sid_ida = struc.id
+    out.set_name(idaapi.get_struc_name(struc.id))
     context.add_model(out)
 
     for member in struc.members:
@@ -36,7 +55,7 @@ def from_structure(struc: idaapi.struc_t, ea: int = None) -> Tuple[model.model_t
                         )
                         out.add_vtable(member.soff, vtable.sid)
 
-    return (out, context)
+    return out
 
 
 # set existing structure padding fields to undefined

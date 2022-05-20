@@ -1,3 +1,4 @@
+import pickle
 import time
 
 import ida_dirtree
@@ -59,3 +60,6 @@ def symless_analyse(config_path):
         print_delay("Info: final IDA autoanalysis", start, time.time())
 
         utils.logger.info("%d structures generated" % total)
+
+        with open(f"{idaapi.get_input_file_path()}_model.pickle", "wb") as f:
+            pickle.dump(model_context, f)
