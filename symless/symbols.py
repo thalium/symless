@@ -121,11 +121,11 @@ def recover_names_from_ctors(ctx: model.context_t, names: set) -> set:
 
         # function is a ctor
         objname = get_classname_from_ctor(ida_utils.demangle(idaapi.get_name(function.ea)))
-        if objname is None or function.args_count == 0 or function.args[0] is None:
+        if objname is None or function.args_count == 0 or function.selected_args[0] is None:
             continue
 
         # function takes a non-shifted first param
-        model, shift = function.args[0]
+        model, shift = function.selected_args[0]
         if model.has_name() or shift != 0 or model.is_vtable():
             continue
 

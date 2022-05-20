@@ -1,7 +1,7 @@
 import bisect
 import collections
 import enum
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 import idaapi
 import idautils
@@ -40,9 +40,11 @@ class model_t:
         # class ctor ea
         self.ctor_ea = None  # first method the object went in
         self.last_load = None  # last vtable load ea
-
+        self.selected_owner: Tuple(model_t, int) = None
+        self.potential_owners: Set(
+            Tuple(model_t, int)
+        ) = set()  # set of (model_t, offset) for vtables
         if self.is_vtable():
-            self.owners = set()  # set of (model_t, offset) for vtables
 
             ptr_size = ida_utils.get_ptr_size()
             self.members_names = [None for _ in range(int(size / ptr_size))]  # list of names
@@ -320,10 +322,16 @@ class function_t:
     def __init__(self, ea: int):
         self.ea = ea
         self.args_count = 0
-        self.args = [
+
+        self.potential_args: List[Set(Tuple(int, int))] = [
             set() for i in range(cpustate.get_abi().get_arg_count())
-        ]  # sets of (sid, shift)
-        self.ret = set()  # set of (sid, shift)
+        ]  # List of sets of Tuple(sid, shift)
+
+        self.selected_args: List[Tuple(int, int)] = [
+            None for i in range(len(self.potential_args))
+        ]  # List of Tuple(sid, shift)
+        self.potential_rets: Set(Tuple(int, int)) = set()  # set of (sid, shift)
+        self.selected_ret: Tuple(int, int) = None
         self.is_virtual = False  # part of a vtable
         self.cc = None  # guessed calling convention
 
@@ -333,7 +341,7 @@ class function_t:
         # merge arguments
         self.args_count = max(self.args_count, original.args_count)
         for i in range(self.args_count):
-            self.args[i].update(original.args[i])
+            self.potential_args[i].update(original.args[i])
 
         # merge cc
         if self.cc is not None and self.cc != original.cc:
@@ -346,19 +354,18 @@ class function_t:
 
     # add ret candidates
     def add_ret(self, sid: int, shift: int):
-        self.ret.add((sid, shift))
+        self.potential_rets.add((sid, shift))
 
     def discard_arg(self, index: int):
-        self.args[index] = None
+        self.selected_args[index] = None
 
     def discard_all_args(self):
-        self.args = [None for i in range(cpustate.get_abi().get_arg_count())]
-        self.ret = None
+        self.selected_args = [None for i in range(cpustate.get_abi().get_arg_count())]
+        self.selected_ret = None
 
     # purge from discarded models, or badly shifted ones
     def purge(self, ctx):
-        args = self.args[: self.args_count] + [self.ret]
-
+        args = self.potential_args[: self.args_count] + [self.potential_rets]
         for arg in args:
             # get invalid arguments
             dq = collections.deque()
@@ -377,12 +384,21 @@ class function_t:
                     if shift < replace.size:
                         arg.add((replace.sid, shift))
 
-    def has_args(self) -> bool:
-        return self.args[0 : self.args_count].count(None) != self.args_count or self.ret is not None
+    def has_selected_args(self) -> bool:
+        return (
+            self.selected_args[0 : self.args_count].count(None) != self.args_count
+            or self.selected_ret is not None
+        )
 
-    def get_args(self):
+    def get_potential_args(self):
         for i in range(self.args_count):
-            current = self.args[i]
+            current = self.potential_args[i]
+            if current is not None:
+                yield (i, current[0], current[1])
+
+    def get_selected_args(self):
+        for i in range(self.args_count):
+            current = self.selected_args[i]
             if current is not None:
                 yield (i, current[0], current[1])
 
@@ -617,7 +633,7 @@ def select_class_vtables(model: model_t, ctx: context_t):
         else:  # model propagated in ctors/dtors, no specific order
             model.vtables[offset] = get_effective_vtables(model.vtables[offset], ctx)
 
-        ctx.models[model.get_vtable(offset)].owners.add((model, offset))
+        ctx.models[model.get_vtable(offset)].potential_owners.add((model, offset))
 
 
 """ Virtual methods propagation """

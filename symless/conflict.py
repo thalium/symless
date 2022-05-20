@@ -14,10 +14,10 @@ import symless.utils as utils
 # between multiple structs containing a ptr to vtable,
 # which one to use to type virtual functions
 def select_vtable_owner(vtable: model.model_t):
-    if len(vtable.owners) > 0:
-        vtable.owners = find_less_derived(list(vtable.owners), vtable.get_ea())
+    if len(vtable.potential_owners) > 0:
+        vtable.selected_owner = find_less_derived(list(vtable.potential_owners), vtable.get_ea())
     else:
-        vtable.owners = None
+        vtable.selected_owner = None
 
 
 """ Between models conflicts resolution """
@@ -346,10 +346,10 @@ def validate_function_arguments(fct: model.function_t):
 
     max_index = -1
     for i in range(fct.args_count):
-        if fct.args[i] is not None:
+        if fct.selected_args[i] is not None:
             max_index = max(max_index, i)
 
-            _, shift = fct.args[i]
+            _, shift = fct.selected_args[i]
 
             subject = model.model_t(-1, 0, model.model_type.STRUCTURE_UKWN_SIZE)
             ctx.add_model(subject)
@@ -383,7 +383,7 @@ def validate_function_arguments(fct: model.function_t):
         if fct.is_virtual and index == 0:  # we are sure about those
             continue
 
-        original, _ = fct.args[index]
+        original, _ = fct.selected_args[index]
 
         # heuristic 2: discard structure argument when only the base of the structure was used
         subject.update_size()
@@ -400,11 +400,11 @@ def select_functions_arguments(ctx: model.context_t):
         function.purge(ctx)
 
         for i in range(function.args_count):
-            function.args[i] = select_argument_type(
-                function, ctx, function.args[i], function.is_virtual and i == 0
+            function.selected_args[i] = select_argument_type(
+                function, ctx, function.potential_args[i], function.is_virtual and i == 0
             )
 
-        function.ret = select_argument_type(function, ctx, function.ret)
+        function.selected_ret = select_argument_type(function, ctx, function.potential_rets)
 
         # validate selected arguments
         validate_function_arguments(function)

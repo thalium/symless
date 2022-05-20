@@ -130,10 +130,11 @@ def set_struc_comment(model: model.model_t, sid: int):
                 "Not directly allocated, ctors/dtors: %s" % ", ".join(map(hex, model.ea)),
                 False,
             )
-    elif model.owners is not None:
+    elif model.selected_owner is not None:
         idaapi.set_struc_cmt(
             sid,
-            "Vtable at: %s of %s" % (", ".join(map(hex, model.ea)), model.owners[0].get_name()),
+            "Vtable at: %s of %s"
+            % (", ".join(map(hex, model.ea)), model.selected_owner[0].get_name()),
             False,
         )
 
@@ -216,8 +217,8 @@ def populate_vtable(vtable: model.model_t, struc: idaapi.struc_t):
         func_tinfo, func_data = get_or_create_fct_type(fea, idaapi.CM_CC_INVALID)
         func_data.cc = cpustate.get_abi().get_object_cc().cc  # force object cc
 
-        if vtable.owners is not None:
-            owner, offset = vtable.owners
+        if vtable.selected_owner is not None:
+            owner, offset = vtable.selected_owner
             ida_utils.set_function_argument(
                 func_data, 0, get_model_ptr_tinfo(owner), offset, get_model_tinfo(owner)
             )
@@ -282,22 +283,24 @@ def get_or_create_fct_type(
 def set_functions_type(functions: Dict[int, model.function_t], force: bool = True):
     for function in functions.values():
         utils.logger.debug(f"typing function {function}")
-        if not function.has_args():
+        if not function.has_selected_args():
             continue
 
         cc = idaapi.CM_CC_UNKNOWN if function.cc is None else function.cc.cc
         func_tinfo, func_data = get_or_create_fct_type(function.ea, cc)
 
         # set ret type
-        if function.ret is not None and (force or existing.can_type_be_replaced(func_data.rettype)):
-            model, shift = function.ret
+        if function.selected_ret is not None and (
+            force or existing.can_type_be_replaced(func_data.rettype)
+        ):
+            model, shift = function.selected_ret
 
             ret_type = get_model_ptr_tinfo(model)
             ida_utils.shift_ptr(ret_type, get_model_tinfo(model), shift)
             func_data.rettype = ret_type
 
         # set args types
-        for (index, model, shift) in function.get_args():
+        for (index, model, shift) in function.get_selected_args():
 
             # check that we can replace existing arg
             if (
