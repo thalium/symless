@@ -241,7 +241,7 @@ def get_entry_points(config_path: str) -> List[allocator_t]:
                 module = ida_utils.get_import_module_index(module_name)
 
                 if module is None:
-                    utils.logger.warning(
+                    utils.logger.debug(
                         "import %s from module %s absent from binary (module not imported)"
                         % (import_name, module_name)
                     )
@@ -249,7 +249,7 @@ def get_entry_points(config_path: str) -> List[allocator_t]:
                 else:
                     ea = ida_utils.get_import_from_module(module, import_name)
                     if ea is None:
-                        utils.logger.warning(
+                        utils.logger.debug(
                             "import %s from module %s absent from binary"
                             % (import_name, module_name)
                         )
