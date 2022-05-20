@@ -200,7 +200,7 @@ class BuildHandler(idaapi.action_handler_t):
             symbols.name_structures(context)
 
             # update idb
-            generation.generate_struct(context.models[0], context)
+            generation.generate_struct(context.get_model_by_sid(struc.id), context)
             generation.set_functions_type(context.functions, False)
 
             # stats output

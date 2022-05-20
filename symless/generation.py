@@ -69,11 +69,9 @@ def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
     sid = idaapi.get_struc_id(model.get_name())
 
     if sid == idaapi.BADADDR:
-        model.set_name(None)  # struct was not added because of bad name
-        sid = idaapi.add_struc(idaapi.BADADDR, model.get_name(), False)
-        move_struc_to_symless_dir(model.get_name())
+        utils.logger.critical(f"Problem struc {model.get_name()} was not created")
+        return
 
-    utils.logger.debug(f"generating content of struct {model.get_name()}")
     struc = idaapi.get_struc(sid)
 
     # make space
@@ -334,10 +332,17 @@ def generate_structs(ctx: model.context_t) -> int:
 
     # generate empty strucs to be used as types
     for mod in ctx.get_models():
-        utils.logger.debug(f"Generating empty {mod.get_name()}")
-        if not mod.is_empty():
-            idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
-            move_struc_to_symless_dir(mod.get_name())
+        if not mod.is_empty() and idaapi.get_struc_id(mod.get_name()) == idaapi.BADADDR:
+            utils.logger.debug(f"Generating empty {mod.get_name()}")
+            sid = idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
+            if sid == idaapi.BADADDR:
+                mod.set_name(None)  # struct was not added because of bad name
+                sid = idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
+            if sid == idaapi.BADADDR:
+                utils.logger.warning(f"Problem generating {mod.get_name()} structure")
+            else:
+                mod.sid_ida = sid
+                move_struc_to_symless_dir(mod.get_name())
 
     # type functions
     set_allocators_type(ctx.allocators)

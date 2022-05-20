@@ -25,6 +25,7 @@ class model_type(enum.IntEnum):
 class model_t:
     def __init__(self, size: int, ea: int = None, type: model_type = model_type.STRUCTURE):
         self.sid = -1  # set by context_t
+        self.sid_ida = -1  # set when add_struc is called
         self.size = size
 
         self.ea = []  # vtable ea or struc allocations ea
@@ -420,6 +421,11 @@ class context_t:
     def add_model(self, model: model_t):
         model.sid = self.next_sid()
         self.models.append(model)
+
+    def get_model_by_sid(self, sid) -> model_t:
+        for m in self.get_models():
+            if m.sid_ida == sid:
+                return m
 
     def get_models(self) -> List[model_t]:
         i, length = 0, len(self.models)
