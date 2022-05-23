@@ -129,14 +129,16 @@ def run_ida(ida_install: tuple, input_file: str, script: str, script_args: [str]
     idat = ida_install[1] if idb_file.endswith(".i64") else ida_install[0]
     cmd, log_file = craft_ida_command(idat, idb_file, script, script_args)
 
-    print("Running IDA script..")
-    print("* IDAT  : %s" % idat)
-    print(
+    # TODO : Stderr is not deontological.. please find a solution
+    # These logs need to not be present in the dump for the diff run during the test
+    stderr_print("Running IDA script..")
+    stderr_print("* IDAT  : %s" % idat)
+    stderr_print(
         "* Script: %s%s"
         % (script, "" if len(script_args) == 0 else ' ("%s")' % '", "'.join(script_args))
     )
-    print("* Base  : %s" % idb_file)
-    print("* Logs  : %s" % log_file)
+    stderr_print("* Base  : %s" % idb_file)
+    stderr_print("* Logs  : %s" % log_file)
 
     process = subprocess.Popen(cmd, shell=(platform.system() != "Windows"))
     code = process.wait()
@@ -148,7 +150,7 @@ def run_ida(ida_install: tuple, input_file: str, script: str, script_args: [str]
         return False
 
     if code == 0:
-        print("IDA script terminated successfully.")
+        stderr_print("IDA script terminated successfully.")
 
         line = True
         while line:

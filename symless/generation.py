@@ -118,7 +118,11 @@ def set_struc_comment(model: model.model_t, sid: int):
                 False,
             )
     elif model.owners is not None:
-        idaapi.set_struc_cmt(sid, "Vtable of %s" % (model.owners[0].get_name()), False)
+        idaapi.set_struc_cmt(
+            sid,
+            "Vtable at: %s of %s" % (", ".join(map(hex, model.ea)), model.owners[0].get_name()),
+            False,
+        )
 
 
 def has_struc_comment(sid: int) -> bool:
