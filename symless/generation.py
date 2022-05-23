@@ -349,6 +349,7 @@ def generate_structs(ctx: model.context_t) -> int:
             utils.logger.debug(f"Generating empty {mod.get_name()}")
             sid = idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
             if sid == idaapi.BADADDR:
+                utils.logger.critical(f"Name of the structure {mod.get_name()} is not correct")
                 mod.set_name(None)  # struct was not added because of bad name
                 sid = idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
             if sid == idaapi.BADADDR:

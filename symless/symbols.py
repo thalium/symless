@@ -10,6 +10,8 @@ import symless.model as model
 import symless.utils.utils as utils
 
 re_struc_name_invalids = re.compile(r"[\s\*&]")
+re_struc_name_invalids2 = re.compile(r"[,\-+]")
+re_struc_name_invalids3 = re.compile(r"[<>]")
 
 re_ctors = re.compile(r"\b((?:[\w_]+::)*)([\S ]+)::\2(?:\(|$)")
 
@@ -27,9 +29,9 @@ def has_name(ea: int):
 
 # Remove unvalid char for setType() in struc name
 def struc_name_cleanup(original: str) -> str:
-    out = re_struc_name_invalids.sub(
-        "", original.replace("<", "__").replace(">", "__").replace(",", "_")
-    )
+    out = re_struc_name_invalids.sub("", original)
+    out = re_struc_name_invalids2.sub("_", out)
+    out = re_struc_name_invalids3.sub("__", out)
     return out
 
 
