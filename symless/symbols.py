@@ -1,4 +1,5 @@
 import re
+from typing import Tuple
 
 import idaapi
 
@@ -6,8 +7,11 @@ import symless.conflict as conflict
 import symless.cpustate.arch as arch
 import symless.ida_utils as ida_utils
 import symless.model as model
+import symless.utils.utils as utils
 
 re_struc_name_invalids = re.compile(r"[\s\*&]")
+re_struc_name_invalids2 = re.compile(r"[,\-+]")
+re_struc_name_invalids3 = re.compile(r"[<>]")
 
 re_ctors = re.compile(r"\b((?:[\w_]+::)*)([\S ]+)::\2(?:\(|$)")
 
@@ -25,9 +29,9 @@ def has_name(ea: int):
 
 # Remove unvalid char for setType() in struc name
 def struc_name_cleanup(original: str) -> str:
-    out = re_struc_name_invalids.sub(
-        "", original.replace("<", "__").replace(">", "__").replace(",", "_")
-    )
+    out = re_struc_name_invalids.sub("", original)
+    out = re_struc_name_invalids2.sub("_", out)
+    out = re_struc_name_invalids3.sub("__", out)
     return out
 
 
@@ -47,13 +51,13 @@ def get_method_name_from_signature(signature: str) -> str:
 
 
 # get (class, parent_class) from vtable label
-def get_classnames_from_vtable(vtable_ea: int) -> (str, str):
+def get_classnames_from_vtable(vtable_ea: int) -> Tuple[str, str]:
     if arch.is_elf():
         return get_classnames_from_vtable_gcc(vtable_ea)
     return get_classnames_from_vtable_msvc(vtable_ea)
 
 
-def get_classnames_from_vtable_gcc(vtable_ea: int) -> (str, str):
+def get_classnames_from_vtable_gcc(vtable_ea: int) -> Tuple[str, str]:
     ptr_size = ida_utils.get_ptr_size()
 
     # use vtable symbol
@@ -75,7 +79,7 @@ def get_classnames_from_vtable_gcc(vtable_ea: int) -> (str, str):
     return (None, None)
 
 
-def get_classnames_from_vtable_msvc(vtable_ea: int) -> (str, str):
+def get_classnames_from_vtable_msvc(vtable_ea: int) -> Tuple[str, str]:
     vtbl_name = ida_utils.demangle(idaapi.get_name(vtable_ea))
 
     if vtbl_name is None or "::" not in vtbl_name:
@@ -119,11 +123,11 @@ def recover_names_from_ctors(ctx: model.context_t, names: set) -> set:
 
         # function is a ctor
         objname = get_classname_from_ctor(ida_utils.demangle(idaapi.get_name(function.ea)))
-        if objname is None or function.args_count == 0 or function.args[0] is None:
+        if objname is None or function.args_count == 0 or function.selected_args[0] is None:
             continue
 
         # function takes a non-shifted first param
-        model, shift = function.args[0]
+        model, shift = function.selected_args[0]
         if model.has_name() or shift != 0 or model.is_vtable():
             continue
 
@@ -211,13 +215,49 @@ def recover_virtual_functions_names(ctx: model.context_t):
 # recover name from ctor_ea for all unamed objects
 def last_chance_name_recovery(ctx: model.context_t, names: set):
     for mod in ctx.get_models():
-        if mod.has_name() or mod.ctor_ea is None:
+
+        if mod.has_name():
             continue
 
-        objname = get_classname_from_ctor(ida_utils.demangle(idaapi.get_name(mod.ctor_ea)))
-        if objname is not None and objname not in names:
-            mod.set_name(objname)
+        utils.logging.debug(f"{mod} {mod.has_name()} {[hex(x) for x in mod.ea]}")
+
+        # Rename the struc with the name of the first func containing its allocator
+        # Far from being perferct but does the trick sometimes and is not worse than nothing in other cases
+        if mod.ctor_ea is not None:
+            objname = get_classname_from_ctor(ida_utils.demangle(idaapi.get_name(mod.ctor_ea)))
+            if objname is not None and objname not in names:
+                mod.set_name(objname)
+                names.add(objname)
+                continue
+
+        if mod.ctor_ea is None:
+            func = idaapi.get_func(mod.ea[0])
+            if func is None:
+                continue
+            objname = get_method_name_from_signature(
+                ida_utils.demangle(idaapi.get_func_name(func.start_ea))
+            )
+            if objname is None or objname.startswith("sub_"):
+                continue
+            nbStrucSameName = 1
+            original_objname = objname
+            while objname in names:
+                objname = "%s%d" % (original_objname, nbStrucSameName)
+                nbStrucSameName += 1
+            mod.set_name("struc_" + objname)
             names.add(objname)
+            continue
+
+
+def name_struc_members(ctx: model.context_t):
+    for mod in ctx.get_models():
+        members_names = mod.get_guessed_names()
+        for i in range(len(members_names)):
+            elt = members_names[i]
+            members_names[i] = (
+                elt[0],
+                get_method_name_from_signature(ida_utils.demangle(elt[1])),
+            )
 
 
 # name structures using symbols
@@ -226,3 +266,4 @@ def name_structures(ctx: model.context_t):
     recover_names_from_ctors(ctx, names)
     last_chance_name_recovery(ctx, names)
     recover_virtual_functions_names(ctx)
+    name_struc_members(ctx)

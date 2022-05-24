@@ -1,13 +1,16 @@
 import bisect
 import collections
 import enum
+from typing import Dict, List, Set, Tuple
 
 import idaapi
 import idautils
 
-import symless.config as config
+import symless.allocators as allocators
 import symless.cpustate.cpustate as cpustate
 import symless.ida_utils as ida_utils
+import symless.utils.utils as utils
+from symless.cpustate import mem_t
 
 
 # from most interesting to last (for merge decisions)
@@ -22,6 +25,7 @@ class model_type(enum.IntEnum):
 class model_t:
     def __init__(self, size: int, ea: int = None, type: model_type = model_type.STRUCTURE):
         self.sid = -1  # set by context_t
+        self.sid_ida = -1  # set when add_struc is called
         self.size = size
 
         self.ea = []  # vtable ea or struc allocations ea
@@ -30,15 +34,18 @@ class model_t:
 
         self.type = type
         self.members = list()  # sorted list of (offset, size)
+        self.members_value = dict()  # dict of (offset) -> (type)
         self.operands = dict()  # (insn.ea, op_index) -> (shift, offset)
         self.symname = None
 
         # class ctor ea
         self.ctor_ea = None  # first method the object went in
         self.last_load = None  # last vtable load ea
-
+        self.selected_owner: Tuple(model_t, int) = None
+        self.potential_owners: Set(
+            Tuple(model_t, int)
+        ) = set()  # set of (model_t, offset) for vtables
         if self.is_vtable():
-            self.owners = set()  # set of (model_t, offset) for vtables
 
             ptr_size = ida_utils.get_ptr_size()
             self.members_names = [None for _ in range(int(size / ptr_size))]  # list of names
@@ -46,6 +53,13 @@ class model_t:
             self.total_xrefs = 0  # sum of all virtual functions (data) xrefs count
         else:
             self.vtables = dict()  # offset -> list of vtable_sid
+            self.members_names = []
+
+    def get_guessed_names(self):
+        if self.is_vtable():
+            return []
+        else:
+            return self.members_names
 
     # add struct member
     def add_member(self, offset: int, size: int) -> bool:
@@ -74,6 +88,26 @@ class model_t:
     def add_operand(self, offset: int, ea: int, n: int, shift: int):
         # TODO handle the fact that same operand can be applied to multiple members of the same struct
         self.operands[(ea, n)] = (shift, offset)
+
+    def guess_member_name(self, target: mem_t, offset: int):
+        # state.get_
+        name_target = idaapi.get_name(target.addr)
+        if name_target is not None:
+            utils.logger.debug(
+                f"name = {name_target} addr = {hex(target.addr)} offset={hex(offset)}"
+            )
+            self.members_names += [(offset, name_target)]
+
+    def set_member_value(self, offset, elt):
+        utils.logger.debug(f"set member value {offset} {elt}")
+        self.members_value[offset] = elt
+
+    def get_member_value(self, offset):
+        utils.logger.debug(f"get member value {offset}")
+        if offset in self.members_value:
+            utils.logger.debug(f"res = {self.members_value[offset]}")
+            return self.members_value[offset]
+        return None
 
     # sorted list of (offset, vtable_sid)
     def get_vtables(self):
@@ -127,6 +161,7 @@ class model_t:
 
     # update size to match last member
     def update_size(self):
+        utils.logger.debug("")
         if len(self.members) > 0:
             last = self.members[-1]
             self.size = last[0] + last[1]
@@ -264,12 +299,14 @@ class model_t:
         return isinstance(other, model_t) and self.sid == other.sid
 
     def dump(self, shift=""):
-        print("%s%s (size: %d) - %s:" % (shift, self.get_name(), self.size, str(self.type)))
+        utils.logger.debug(
+            "%s%s (size: %d) - %s:" % (shift, self.get_name(), self.size, str(self.type))
+        )
         shift += "  "
 
-        print("%smembers (%d):" % (shift, len(self.members)))
+        utils.logger.debug("%smembers (%d):" % (shift, len(self.members)))
         for offset, size in self.members:
-            print(
+            utils.logger.debug(
                 "%s%x - %x%s"
                 % (
                     shift,
@@ -278,7 +315,7 @@ class model_t:
                     " -> vtable" if not self.is_vtable() and offset in self.vtables else "",
                 )
             )
-        print()
+        utils.logger.debug("")
 
 
 # Model of a function
@@ -286,10 +323,16 @@ class function_t:
     def __init__(self, ea: int):
         self.ea = ea
         self.args_count = 0
-        self.args = [
+
+        self.potential_args: List[Set(Tuple(int, int))] = [
             set() for i in range(cpustate.get_abi().get_arg_count())
-        ]  # sets of (sid, shift)
-        self.ret = set()  # set of (sid, shift)
+        ]  # List of sets of Tuple(sid, shift)
+
+        self.selected_args: List[Tuple(int, int)] = [
+            None for i in range(len(self.potential_args))
+        ]  # List of Tuple(sid, shift)
+        self.potential_rets: Set(Tuple(int, int)) = set()  # set of (sid, shift)
+        self.selected_ret: Tuple(int, int) = None
         self.is_virtual = False  # part of a vtable
         self.cc = None  # guessed calling convention
 
@@ -299,12 +342,12 @@ class function_t:
         # merge arguments
         self.args_count = max(self.args_count, original.args_count)
         for i in range(self.args_count):
-            self.args[i].update(original.args[i])
+            self.potential_args[i].update(original.args[i])
 
         # merge cc
         if self.cc is not None and self.cc != original.cc:
-            print(
-                'Error: guessing multiple cc for function 0x%x, "%s" != "%s"'
+            utils.logger.error(
+                'Guessing multiple cc for function 0x%x, "%s" != "%s"'
                 % (self.ea, self.cc.name, original.cc.name)
             )
         else:
@@ -312,19 +355,18 @@ class function_t:
 
     # add ret candidates
     def add_ret(self, sid: int, shift: int):
-        self.ret.add((sid, shift))
+        self.potential_rets.add((sid, shift))
 
     def discard_arg(self, index: int):
-        self.args[index] = None
+        self.selected_args[index] = None
 
     def discard_all_args(self):
-        self.args = [None for i in range(cpustate.get_abi().get_arg_count())]
-        self.ret = None
+        self.selected_args = [None for i in range(cpustate.get_abi().get_arg_count())]
+        self.selected_ret = None
 
     # purge from discarded models, or badly shifted ones
     def purge(self, ctx):
-        args = self.args[: self.args_count] + [self.ret]
-
+        args = self.potential_args[: self.args_count] + [self.potential_rets]
         for arg in args:
             # get invalid arguments
             dq = collections.deque()
@@ -343,30 +385,49 @@ class function_t:
                     if shift < replace.size:
                         arg.add((replace.sid, shift))
 
-    def has_args(self) -> bool:
-        return self.args[0 : self.args_count].count(None) != self.args_count or self.ret is not None
+    def has_selected_args(self) -> bool:
+        return (
+            self.selected_args[0 : self.args_count].count(None) != self.args_count
+            or self.selected_ret is not None
+        )
 
-    def get_args(self):
+    def get_potential_args(self):
         for i in range(self.args_count):
-            current = self.args[i]
+            current = self.potential_args[i]
             if current is not None:
                 yield (i, current[0], current[1])
+
+    def get_selected_args(self):
+        for i in range(self.args_count):
+            current = self.selected_args[i]
+            if current is not None:
+                yield (i, current[0], current[1])
+
+    def __repr__(self):
+        return f"model.function_t {hex(self.ea)}"
 
 
 # Record of models
 class context_t:
     def __init__(self):
+        self.models: List[model_t]
         self.models = []  # list of model_t, may contain Nones for discarded models
-        self.allocators = set()  # set of config.allocator_t
+        self.allocators = set()  # set of allocators.allocator_t
         self.all_operands = dict()  # (insn.ea, op_index) -> (op_boundary, set of models_sids)
         self.vtables = dict()  # vtable_ea -> model_t
+        self.functions: Dict[int, function_t]
         self.functions = dict()  # ea -> function_t
 
     def add_model(self, model: model_t):
         model.sid = self.next_sid()
         self.models.append(model)
 
-    def get_models(self):
+    def get_model_by_sid(self, sid) -> model_t:
+        for m in self.get_models():
+            if m.sid_ida == sid:
+                return m
+
+    def get_models(self) -> List[model_t]:
         i, length = 0, len(self.models)
         while i < length:
             if isinstance(self.models[i], model_t):
@@ -375,6 +436,7 @@ class context_t:
 
     # get ctors for already visited classes
     def get_visited_ctors(self) -> dict:
+        utils.logger.debug("")
         out = dict()
         for model in self.get_models():
             if model.ctor_ea is not None:
@@ -416,7 +478,7 @@ class context_t:
         self.vtables[ea] = vtable
         return vtable
 
-    def add_allocator(self, allocator: config.allocator_t):
+    def add_allocator(self, allocator: allocators.allocator_t):
         self.allocators.add(allocator)
 
     def add_operand_for(self, ea: int, n: int, boundary: int, model: model_t):
@@ -434,6 +496,7 @@ class context_t:
         return ea in self.functions
 
     def update_functions(self, visited: dict):
+        utils.logger.debug("")
         for ea, function in visited.items():
             if not function.has_args():
                 continue
@@ -447,14 +510,14 @@ class context_t:
         return len(self.models)
 
     def dump(self):
-        print("# Memory allocators:")
+        utils.logger.debug("# Memory allocators:")
         for alloc in self.allocators:
-            print(alloc)
+            utils.logger.debug(alloc)
 
-        print("\n# Models:\n")
+        utils.logger.debug("\n# Models:\n")
         for model in self.get_models():
             model.dump()
-            print()
+            utils.logger.debug("")
 
 
 # link between discarded model and its replacement
@@ -503,7 +566,7 @@ def insert_struct_member(members: list, offset: int, size: int):
 """ Effective vtable selection """
 
 # count of xrefs to vtable functions
-def vtable_ref_count(vtable_ea) -> (int, int):
+def vtable_ref_count(vtable_ea) -> Tuple[int, int]:
     count, size = 0, 0
     for fea in ida_utils.vtable_members(vtable_ea):
         count += len(ida_utils.get_data_references(fea))
@@ -570,13 +633,13 @@ def get_effective_vtables(vtables: list, ctx: context_t) -> list:
 # select last original vtable loaded, aka last vtable used in ctor = effective one
 def select_class_vtables(model: model_t, ctx: context_t):
     for offset in model.vtables:
-
+        utils.logger.debug(model)
         if model.is_struct():  # propagation started with ctor
             model.vtables[offset] = get_unique_vtables(model.vtables[offset])
         else:  # model propagated in ctors/dtors, no specific order
             model.vtables[offset] = get_effective_vtables(model.vtables[offset], ctx)
 
-        ctx.models[model.get_vtable(offset)].owners.add((model, offset))
+        ctx.models[model.get_vtable(offset)].potential_owners.add((model, offset))
 
 
 """ Virtual methods propagation """
@@ -597,13 +660,14 @@ def analyze_vtable(
 
 # continue model building by analyzing newly found virtual functions
 def analyze_model_vtables(model: model_t, params: cpustate.propagation_param_t, ctx: context_t):
-
+    utils.logger.debug("")
     # select effective vtables before propagation
     select_class_vtables(model, ctx)
 
     cc = cpustate.get_object_cc()
 
     for offset in model.vtables:
+        utils.logger.debug(offset)
 
         starting_state = cpustate.state_t()
         cpustate.populate_arguments(starting_state, cc)
@@ -647,25 +711,29 @@ def handle_access(state: cpustate.state_t, ctx: context_t):
             offset = cpustate.ctypes.c_int32(disp.offset + cur.shift).value
             if cur.shift < 0 or offset < 0:
                 continue
-
+            model: model_t
             model = ctx.models[cur.sid]
             if (model.size > 0 and cur.shift >= model.size) or not model.add_member(
                 offset, disp.nbytes
             ):
                 continue
-
+            utils.logger.debug(
+                f"add_operand to {model.get_name()} at offset {hex(offset)} ea : {hex(access.ea)} n : {access.n} "
+            )
             model.add_operand(offset, access.ea, access.n, cur.shift)
 
             boundary = cpustate.ctypes.c_int32(disp.offset).value  # lower boundary
             if boundary >= 0:
                 boundary += disp.nbytes  # upper boundary
             ctx.add_operand_for(access.ea, access.n, boundary, model)
+            utils.logger.debug(f"add_operand for model {model}")
 
 
 # Handle writes to struc members
 def handle_write(ea: int, state: cpustate.state_t, ctx: context_t):
     ptr_size = ida_utils.get_ptr_size()
     for write in state.writes:
+        utils.logger.debug(write)
         disp = write.disp
         target = write.src
         cur = state.get_previous_register(disp.reg)
@@ -681,13 +749,17 @@ def handle_write(ea: int, state: cpustate.state_t, ctx: context_t):
 
             vtable_ea = target.get_val()
             vtbl_size = ida_utils.vtable_size(vtable_ea)
+            model: model_t
+            model = ctx.models[cur.sid]
+
             if vtbl_size == 0:  # Not a vtable
+                model.guess_member_name(target, offset)
+                model.set_member_value(offset, target)
                 continue
 
-            model = ctx.models[cur.sid]
             if model.is_vtable():
-                print(
-                    "Warning: propagation found %s having another vtable (0x%x) loaded at 0x%x. Ignoring.."
+                utils.logger.warning(
+                    "propagation found %s having another vtable (0x%x) loaded at 0x%x. Ignoring.."
                     % (model.get_name(), vtable_ea, ea)
                 )
                 continue
@@ -714,6 +786,8 @@ def handle_read(state: cpustate.state_t, ctx: context_t):
 
         # mov reg, [sid + offset]
         if isinstance(src, cpustate.sid_t):
+            utils.logger.debug(f"{read}")
+
             if disp.nbytes != ptr_size:
                 continue
 
@@ -724,15 +798,19 @@ def handle_read(state: cpustate.state_t, ctx: context_t):
             offset = cpustate.ctypes.c_int32(disp.offset + src.shift).value
 
             vtable_sid = model.get_vtable(offset)  # current vtable
-            if vtable_sid < 0:
+            if vtable_sid >= 0:
+                # vtable ptr was read, inject it in state
+                state.set_register(read.dst, cpustate.sid_t(vtable_sid))
                 continue
 
-            # vtable ptr was read, inject it in state
-            state.set_register(read.dst, cpustate.sid_t(vtable_sid))
+            member_value = model.get_member_value(offset)
+            if member_value is not None:
+                state.set_register(read.dst, member_value)
 
 
 # handle new cpu state
 def handle_state(ea: int, state: cpustate.state_t, ctx: context_t):
+    utils.logger.log(5, f"handle_state {hex(ea)} {state}")
     handle_access(state, ctx)
     handle_write(ea, state, ctx)
     handle_read(state, ctx)
@@ -752,8 +830,8 @@ class allocation_type(enum.Enum):
 # Analyze function which calls the given allocator
 # return True if the function is an allocator wrapper, otherwise builds the model
 def analyze_allocator(
-    func: idaapi.func_t, allocator: config.allocator_t, call_ea: int, ctx: context_t
-) -> (bool, tuple):
+    func: idaapi.func_t, allocator: allocators.allocator_t, call_ea: int, ctx: context_t
+) -> Tuple[bool, tuple]:
     atype = allocation_type.BEFORE_ALLOCATION
     params = cpustate.propagation_param_t(depth=0)
 
@@ -764,15 +842,15 @@ def analyze_allocator(
         if atype == allocation_type.BEFORE_ALLOCATION and ea == call_ea:
             action, size = allocator.on_call(state)
 
-            if action == config.alloc_action_t.JUMP_TO_ALLOCATOR:
+            if action == allocators.alloc_action_t.JUMP_TO_ALLOCATOR:
                 return (True, size)
 
-            if action == config.alloc_action_t.WRAPPED_ALLOCATOR:
+            if action == allocators.alloc_action_t.WRAPPED_ALLOCATOR:
                 atype = allocation_type.SIZE_PASSTHROUGH
                 wrapper_args = size
 
             # a struc/buffer is allocated
-            elif action == config.alloc_action_t.STATIC_ALLOCATION:
+            elif action == allocators.alloc_action_t.STATIC_ALLOCATION:
                 model = model_t(size, ea)
                 ctx.add_model(model)
                 cpustate.set_ret_value(state, cpustate.sid_t(model.sid, 0))
@@ -806,16 +884,20 @@ def analyze_allocator(
 
 
 # Analyze the children of a memory allocator
-def analyze_allocator_heirs(allocator: config.allocator_t, ctx: context_t):
+def analyze_allocator_heirs(allocator: allocators.allocator_t, ctx: context_t):
     if allocator in ctx.allocators:  # avoid inifine recursion if crossed xrefs
         return
 
     ctx.add_allocator(allocator)
 
     for current in ida_utils.get_all_references(allocator.ea):
+
         insn = idautils.DecodeInstruction(current)
         if insn is None:
+            utils.logger.debug(f"ignore xref {hex(current)}")
             continue
+
+        utils.logger.debug(f"analyse xref {hex(current)}")
 
         if insn.itype in [
             idaapi.NN_jmp,
@@ -835,15 +917,16 @@ def analyze_allocator_heirs(allocator: config.allocator_t, ctx: context_t):
 
 # Start building the model & locate memory allocators
 # from the given entry points (list of allocator functions)
-def analyze_allocations(imports: [], ctx: context_t):
+def analyze_allocations(imports: List[allocators.allocator_t], ctx: context_t):
     for i in imports:
+        utils.logger.debug(i)
         analyze_allocator_heirs(i, ctx)
 
 
 """ Ctors & dtors analysis (cpp classes only) """
 
 # is given function a ctor/dtor (does it load a vtable into a class given as first arg)
-def is_ctor(func: idaapi.func_t, load_addr: int) -> (bool, int):
+def is_ctor(func: idaapi.func_t, load_addr: int) -> Tuple[bool, int]:
     state = cpustate.state_t()
     params = cpustate.propagation_param_t(depth=0)
     cpustate.set_argument(cpustate.get_object_cc(), state, 0, cpustate.sid_t(0))
@@ -874,6 +957,7 @@ def get_ctors() -> dict:
     # associate each ctor/dtor to one vtable (effective table of one class)
     ctor_vtbl = dict()  # ctor_ea -> vtbl_ea
     for vtbl_ref, vtbl_addr in ida_utils.get_all_vtables():
+        utils.logger.debug(f"{vtbl_ref} {vtbl_addr}")
         for xref in ida_utils.get_data_references(vtbl_ref):
             if not ida_utils.is_vtable_load(xref):
                 continue
@@ -894,26 +978,31 @@ def get_ctors() -> dict:
     # regroup ctors/dtors by families
     mifa = dict()  # vtbl_ea -> list of ctors
     for ctor, vtbl in ctor_vtbl.items():
+        utils.logger.debug(f"{ctor} {vtbl}")
         if vtbl not in mifa:
             mifa[vtbl] = collections.deque()
         mifa[vtbl].append(ctor)
-
+    utils.logger.debug("")
     return mifa
 
 
 # analyze unvisited ctors / dtors and build model
 def analyze_ctors(ctx: context_t):
+    utils.logger.debug("")
     visited = ctx.get_visited_ctors()
+    utils.logger.debug("")
 
     count = 0
     cc = cpustate.get_object_cc()
-
+    utils.logger.debug("")
     for fam in get_ctors().values():
+        utils.logger.debug(fam)
 
         # was the model already generated ?
         model = None
         from_existing = False
         for ctor in fam:
+            utils.logger.debug(ctor)
             if ctor in visited:
                 model = visited[ctor]
                 from_existing = True
@@ -933,7 +1022,7 @@ def analyze_ctors(ctx: context_t):
 
         # propagate model in ctors / dtors
         for ctor in fam:
-
+            utils.logger.debug(ctor)
             if not from_existing:
                 model.ea.append(ctor)
             elif ctx.has_function(ctor):  # propagation was already done there for this model
@@ -956,14 +1045,14 @@ def analyze_ctors(ctx: context_t):
 
         count += 1
 
-    print("Info: %d additionnal classes retrieved from their vtables" % count)
+    utils.logger.info("%d additionnal classes retrieved from their vtables" % count)
 
 
 """ Model generation main """
 
 # Model generation
 def generate_model(config_path: str) -> context_t:
-    imports = config.get_entry_points(config_path)
+    imports = allocators.get_entry_points(config_path)
     if imports is None:
         return None
 
@@ -971,8 +1060,8 @@ def generate_model(config_path: str) -> context_t:
 
     # retrieved structures allocated
     if len(imports) == 0:
-        print(
-            "Warning: None of the defined allocators are present. No structure will be found from allocations"
+        utils.logger.warning(
+            "None of the defined allocators are present. No structure will be found from allocations"
         )
     else:
         analyze_allocations(imports, ctx)

@@ -1,12 +1,17 @@
+from typing import Dict, Tuple
+
 import idaapi
 import idc
 
 import symless.cpustate.cpustate as cpustate
 import symless.existing as existing
-import symless.ida_utils as ida_utils
 import symless.model as model
 import symless.symbols as symbols
+import symless.utils.ida_utils as ida_utils
+import symless.utils.utils as utils
 
+STRUC_DIR: idaapi.dirtree_t
+STRUC_DIR = None
 
 # Apply struc type on operand
 def set_operand_type(ea: int, n: int, sid: int, shift: int):
@@ -59,11 +64,12 @@ def get_model_ptr_tinfo(m: model.model_t) -> idaapi.tinfo_t:
 
 # Generate a new struc implementing given model
 def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
+    utils.logger.debug(f"generating content of struct {model.get_name()}")
     sid = idaapi.get_struc_id(model.get_name())
 
     if sid == idaapi.BADADDR:
-        model.set_name(None)  # struct was not added because of bad name
-        sid = idaapi.add_struc(idaapi.BADADDR, model.get_name(), False)
+        utils.logger.critical(f"Problem struc {model.get_name()} was not created")
+        return
 
     struc = idaapi.get_struc(sid)
 
@@ -72,6 +78,7 @@ def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
 
     # add members
     for (offset, size) in model.members:
+        utils.logger.debug(f"add struc member {(offset, size)}")
         idaapi.add_struc_member(
             struc, f"field_{offset:08x}", offset, get_data_flags(size), None, size
         )
@@ -96,10 +103,13 @@ def generate_struct(model: model.model_t, ctx: model.context_t) -> int:
         # mark vtable ptrs
         mark_vtable_ptrs(model)
 
+        set_guessed_name_members(model, struc, ctx)
+
     # TODO possible upgrade: if stroff exists, replace by struc returned by less_derived(current, existing)
 
     # apply struc offsets on operands
     for (ea, n, shift) in model.get_operands():
+        utils.logger.debug(f"creating crefs ea:{hex(ea)} n : {n} shift : {shift}")
         if not existing.has_op_stroff(ea, n):
             set_operand_type(ea, n, sid, shift)
 
@@ -117,12 +127,24 @@ def set_struc_comment(model: model.model_t, sid: int):
                 "Not directly allocated, ctors/dtors: %s" % ", ".join(map(hex, model.ea)),
                 False,
             )
-    elif model.owners is not None:
-        idaapi.set_struc_cmt(sid, "Vtable of %s" % (model.owners[0].get_name()), False)
+    elif model.selected_owner is not None:
+        idaapi.set_struc_cmt(
+            sid,
+            "Vtable at: %s of %s"
+            % (", ".join(map(hex, model.ea)), model.selected_owner[0].get_name()),
+            False,
+        )
 
 
 def has_struc_comment(sid: int) -> bool:
     return idaapi.get_struc_cmt(sid, False) is not None
+
+
+# set
+def set_guessed_name_members(model: model.model_t, struc: idaapi.struc_t, ctx: model.context_t):
+
+    for (offset, name) in model.get_guessed_names():
+        idaapi.set_member_name(struc, offset, name)
 
 
 # set type & name of struc vtable ptrs
@@ -192,8 +214,8 @@ def populate_vtable(vtable: model.model_t, struc: idaapi.struc_t):
         func_tinfo, func_data = get_or_create_fct_type(fea, idaapi.CM_CC_INVALID)
         func_data.cc = cpustate.get_abi().get_object_cc().cc  # force object cc
 
-        if vtable.owners is not None:
-            owner, offset = vtable.owners
+        if vtable.selected_owner is not None:
+            owner, offset = vtable.selected_owner
             ida_utils.set_function_argument(
                 func_data, 0, get_model_ptr_tinfo(owner), offset, get_model_tinfo(owner)
             )
@@ -209,6 +231,7 @@ def populate_vtable(vtable: model.model_t, struc: idaapi.struc_t):
 # Set type & rename memory allocators if needed
 def set_allocators_type(allocators: list):
     for alloc in allocators:
+        utils.logger.debug(f"allocator {alloc}")
         # set name
         if not symbols.has_name(alloc.ea):
             idaapi.set_name(alloc.ea, alloc.get_name())
@@ -223,7 +246,9 @@ def set_allocators_type(allocators: list):
 
 
 # get function type, create default one if none
-def get_or_create_fct_type(fea: int, default_cc: int) -> (idaapi.tinfo_t, idaapi.func_type_data_t):
+def get_or_create_fct_type(
+    fea: int, default_cc: int
+) -> Tuple[idaapi.tinfo_t, idaapi.func_type_data_t]:
     func_tinfo = idaapi.tinfo_t()
     func_data = idaapi.func_type_data_t()
 
@@ -252,25 +277,27 @@ def get_or_create_fct_type(fea: int, default_cc: int) -> (idaapi.tinfo_t, idaapi
 
 
 # type functions crossed during state propagation
-def set_functions_type(functions: dict, force: bool = True):
+def set_functions_type(functions: Dict[int, model.function_t], force: bool = True):
     for function in functions.values():
-
-        if not function.has_args():
+        utils.logger.debug(f"typing function {function}")
+        if not function.has_selected_args():
             continue
 
         cc = idaapi.CM_CC_UNKNOWN if function.cc is None else function.cc.cc
         func_tinfo, func_data = get_or_create_fct_type(function.ea, cc)
 
         # set ret type
-        if function.ret is not None and (force or existing.can_type_be_replaced(func_data.rettype)):
-            model, shift = function.ret
+        if function.selected_ret is not None and (
+            force or existing.can_type_be_replaced(func_data.rettype)
+        ):
+            model, shift = function.selected_ret
 
             ret_type = get_model_ptr_tinfo(model)
             ida_utils.shift_ptr(ret_type, get_model_tinfo(model), shift)
             func_data.rettype = ret_type
 
         # set args types
-        for (index, model, shift) in function.get_args():
+        for (index, model, shift) in function.get_selected_args():
 
             # check that we can replace existing arg
             if (
@@ -288,18 +315,48 @@ def set_functions_type(functions: dict, force: bool = True):
             idaapi.apply_tinfo(function.ea, func_tinfo, idaapi.TINFO_DEFINITE)
 
 
+def move_struc_to_symless_dir(name):
+    global STRUC_DIR
+    if STRUC_DIR is None:
+        STRUC_DIR = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
+
+    STRUC_DIR.rename(name, "symless/" + name)
+
+
+def make_symless_dir():
+    global STRUC_DIR
+    if STRUC_DIR is None:
+        STRUC_DIR = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
+
+    # Create symless dir if necessary
+    struc_dir: idaapi.dirtree_t = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
+    ite = idaapi.dirtree_iterator_t()
+    ok = struc_dir.findfirst(ite, "symless")
+    if not ok:
+        struc_dir.mkdir("symless")
+
+
 # Generate structures from model
 def generate_structs(ctx: model.context_t) -> int:
 
-    print(
-        "Info: generating %d structures.."
-        % sum([(0 if i.is_empty() else 1) for i in ctx.get_models()])
+    utils.logger.info(
+        "Generating %d structures.." % sum([(0 if i.is_empty() else 1) for i in ctx.get_models()])
     )
 
     # generate empty strucs to be used as types
     for mod in ctx.get_models():
-        if not mod.is_empty():
-            idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
+        if not mod.is_empty() and idaapi.get_struc_id(mod.get_name()) == idaapi.BADADDR:
+            utils.logger.debug(f"Generating empty {mod.get_name()}")
+            sid = idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
+            if sid == idaapi.BADADDR:
+                utils.logger.critical(f"Name of the structure {mod.get_name()} is not correct")
+                mod.set_name(None)  # struct was not added because of bad name
+                sid = idaapi.add_struc(idaapi.BADADDR, mod.get_name(), False)
+            if sid == idaapi.BADADDR:
+                utils.logger.warning(f"Problem generating {mod.get_name()} structure")
+            else:
+                mod.sid_ida = sid
+                move_struc_to_symless_dir(mod.get_name())
 
     # type functions
     set_allocators_type(ctx.allocators)

@@ -5,22 +5,13 @@ import idaapi
 import idautils
 
 import symless.cpustate.arch as arch
+import symless.hookalls as hookalls
 import symless.ida_utils as ida_utils
+import symless.utils.utils as utils
 from symless.cpustate import *
 
 # max functions depth to propagate a structure
 MAX_PROPAGATION_RECURSION = 100
-
-
-# get instructions operands + convert registers (al -> rax)
-def get_insn_ops(insn: idaapi.insn_t) -> list:
-    ops = list()
-    for op in insn.ops:
-        if op.type != idaapi.o_void:
-            if op.reg in X64_REG_ALIASES:
-                op.reg = X64_REG_ALIASES[op.reg]
-            ops.append(op)
-    return ops
 
 
 # ignore instruction
@@ -330,9 +321,9 @@ def check_types(effective: tuple, expected: tuple) -> bool:
 
 # dump insn & operands
 def dump_insn(insn: idaapi.insn_t, ops):
-    print(insn_str(insn))
+    utils.logger.log(5, insn_str(insn))
     for op in ops:
-        print("\t" + op_str(op))
+        utils.logger.log(5, "\t" + op_str(op))
 
 
 # handle zero-operand instructions
@@ -395,9 +386,16 @@ def handle_two_ops_insn(state: state_t, insn: idaapi.insn_t, ops):
         raise BaseException("not implemented")
 
 
+# pretty print state and insn
+def dbg_dump_state_insn(insn: state_t, ops: list, state: state_t):
+    utils.logger.log(5, "---------------------------------------------------------")
+    dump_insn(insn, ops)
+    utils.logger.log(5, state)
+
+
 # process one instruction & update current state
 def process_instruction(state: state_t, insn: idaapi.insn_t):
-    ops = get_insn_ops(insn)
+    ops = ida_utils.get_insn_ops(insn)
     state.reset()
 
     op_len = len(ops)
@@ -412,7 +410,7 @@ def process_instruction(state: state_t, insn: idaapi.insn_t):
     elif op_len == 4:
         handle_reg_drop(state, insn, ops[0])
     else:
-        print("unsupported instruction with %d operands:" % op_len)
+        utils.logger.error("unsupported instruction with %d operands:" % op_len)
         dump_insn(insn, ops)
 
     # register any access through displ missed by custom handlers
@@ -432,9 +430,11 @@ def process_instruction(state: state_t, insn: idaapi.insn_t):
                 cur = state.get_previous_register(index)
                 state.arguments.validate(cur)
 
+    dbg_dump_state_insn(insn, ops, state)
+
 
 # read all instructions from input basic block
-def read_basic_block_instructions(bb: idaapi.qbasic_block_t):
+def read_basic_block_instructions(bb: idaapi.qbasic_block_t) -> idaapi.insn_t:
     ea = bb.start_ea
     while ea < bb.end_ea:
         # skip non-code instructions
@@ -611,6 +611,9 @@ class function_t:
             return 0
         return self.args_count
 
+    def __repr__(self):
+        return f"cpustate.function_t {hex(self.ea)}"
+
 
 # Injector into state_t
 class injector_t:
@@ -680,17 +683,26 @@ class propagation_param_t:
 
 # Returns (should_propagate, is_call, callee_addr)
 def should_propagate_in_callee(insn: idaapi.insn_t, state: state_t, params: propagation_param_t):
+
     is_call = insn.itype in INSN_CALLS
     if not is_call and insn.itype not in INSN_UNCONDITIONAL_JUMPS:
         return (False, False, None)
 
-    op = insn.ops[0]
-    if op.type not in [idaapi.o_mem, idaapi.o_far, idaapi.o_near]:
-        return (False, is_call, op.addr)
+    op: idaapi.op_t = insn.ops[0]
 
-    addr = op.addr
-    if op.type == idaapi.o_mem:
-        addr = ida_utils.dereference_pointer(addr)
+    if op.type == idaapi.o_reg:
+        addr = state.get_register(op.reg)
+        if isinstance(addr, mem_t):
+            addr: mem_t
+            addr = addr.addr
+        else:
+            return (False, is_call, op.addr)
+    elif op.type in [idaapi.o_mem, idaapi.o_far, idaapi.o_near]:
+        addr = op.addr
+        if op.type == idaapi.o_mem:
+            addr = ida_utils.dereference_pointer(addr)
+    else:
+        return (False, is_call, op.addr)
 
     if not params.should_propagate(state, addr, False, not is_call):
         return (False, is_call, addr)
@@ -700,6 +712,7 @@ def should_propagate_in_callee(insn: idaapi.insn_t, state: state_t, params: prop
     if callee is None or callee.start_ea != addr:
         return (False, is_call, addr)
 
+    utils.logger.debug(f"analyse call to  {hex(addr)}")
     return (True, is_call, addr)
 
 
@@ -730,14 +743,15 @@ def function_execution_flow(
 
         for insn in read_basic_block_instructions(flow[node]):
 
-            params.injector.update_state(state, insn)
-
             # propagate in callee ?
             callee = None
             (propagate, is_call, callee_addr) = should_propagate_in_callee(insn, state, params)
             if callee_addr is not None:
                 state.call_to = callee_addr
-                if propagate:
+
+                if hookalls.hook_call(callee_addr, state, insn):
+                    pass
+                elif propagate:
                     callee = idaapi.get_func(callee_addr)
                 elif is_call:
                     # Don't spread in callee, set call_t value in rax
@@ -746,6 +760,8 @@ def function_execution_flow(
 
                     if params.has_function(callee_addr):
                         validate_passthrough_args(state, params.get_function(callee_addr), is_call)
+
+            params.injector.update_state(state, insn)
 
             yield insn.ea, state
 

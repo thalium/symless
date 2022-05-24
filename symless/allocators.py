@@ -1,10 +1,12 @@
 import enum
 import re
+from typing import List, Tuple
 
 import idaapi
 
 import symless.cpustate.cpustate as cpustate
-import symless.ida_utils as ida_utils
+import symless.utils.ida_utils as ida_utils
+import symless.utils.utils as utils
 
 # do not consider alloc bigger than this to be object allocs
 g_max_alloc = 0xFFFFFF
@@ -51,7 +53,7 @@ class allocator_t:
         pass
 
     # what type of allocation for given state + allocation size for STATIC_ALLOCATION
-    def on_call(self, state: cpustate.state_t) -> (alloc_action_t, int):
+    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
         return (alloc_action_t.UNDEFINED, 0)
 
     # for WRAPPED_ALLOCATOR action, does wrapper ret confirm it is a wrapper
@@ -69,7 +71,9 @@ class allocator_t:
         return isinstance(other, allocator_t) and self.ea == other.ea
 
     def __repr__(self):
-        return f"[{self.ea:x}] - {ida_utils.demangle(idaapi.get_name(self.ea))} ({self.get_name()})"
+        return (
+            f"[0x{self.ea:x}] - {ida_utils.demangle(idaapi.get_name(self.ea))} ({self.get_name()})"
+        )
 
 
 # malloc like function, takes one size parameter and returns memory space
@@ -78,7 +82,7 @@ class malloc_like_t(allocator_t):
         allocator_t.__init__(self, ea, "malloc")
         self.size_index = size_index
 
-    def on_call(self, state: cpustate.state_t) -> (alloc_action_t, int):
+    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
         is_jump = state.call_type == cpustate.call_type_t.JUMP
 
         # size parameter
@@ -118,7 +122,7 @@ class calloc_like_t(allocator_t):
         self.count_index = count_index
         self.size_index = size_index
 
-    def on_call(self, state: cpustate.state_t) -> (alloc_action_t, int):
+    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
         is_jump = state.call_type == cpustate.call_type_t.JUMP
 
         count_arg = cpustate.get_argument(
@@ -170,7 +174,7 @@ available_allocators = {"malloc": malloc_like_t, "calloc": calloc_like_t, "reall
 
 
 # parse calloc(0, 1) into (calloc_like_t, [0,1])
-def parse_allocator(declaration: str) -> (allocator_t, list):
+def parse_allocator(declaration: str) -> Tuple[allocator_t, list]:
     pattern = re.compile(r"^([a-zA-Z]+)(?:\((\s*[0-9]+\s*(?:\|\s*[0-9]+\s*)*)?\))?$")
     match = pattern.match(declaration)
     if match is None:
@@ -197,13 +201,13 @@ def parse_allocator(declaration: str) -> (allocator_t, list):
 
 
 # reads config.csv data to find memory allocators in the binary, used as entry points
-def get_entry_points(config_path: str):
+def get_entry_points(config_path: str) -> List[allocator_t]:
     imports = []
 
     try:
         config = open(config_path)
     except FileNotFoundError as e:
-        print("Error: can not retrieve config file (%s)" % str(e))
+        utils.logger.error("Can not retrieve config file (%s)" % str(e))
         return None
 
     i = 1
@@ -217,13 +221,13 @@ def get_entry_points(config_path: str):
             keys = current.split(",")
             length = len(keys)
             if length > 3 or length < 2:
-                print("Error: %s bad syntax at line %d" % (config_path, i))
+                utils.logger.error("%s bad syntax at line %d" % (config_path, i))
                 return None
 
             import_type, args = parse_allocator(keys[-1].strip())
             if import_type is None:
-                print(
-                    'Error: %s bad syntax for allocator type "%s" at line %d'
+                utils.logger.error(
+                    '%s bad syntax for allocator type "%s" at line %d'
                     % (config_path, keys[-1].strip(), i)
                 )
                 return None
@@ -237,19 +241,21 @@ def get_entry_points(config_path: str):
                 module = ida_utils.get_import_module_index(module_name)
 
                 if module is None:
-                    # print("Warning: import %s from module %s absent from binary (module not imported)" % (import_name, module_name))
+                    utils.logger.debug(
+                        "import %s from module %s absent from binary (module not imported)"
+                        % (import_name, module_name)
+                    )
                     pass
                 else:
                     ea = ida_utils.get_import_from_module(module, import_name)
                     if ea is None:
-                        print(
-                            "Warning: import %s from module %s absent from binary"
+                        utils.logger.debug(
+                            "import %s from module %s absent from binary"
                             % (import_name, module_name)
                         )
                     else:
-                        print(
-                            "Info: retrieved entry point %s from module %s"
-                            % (import_name, module_name)
+                        utils.logger.info(
+                            "retrieved entry point %s from module %s" % (import_name, module_name)
                         )
 
                         imports.append(import_type(ea, *args))
@@ -266,9 +272,9 @@ def get_entry_points(config_path: str):
 
                 func = idaapi.get_func(func_ea)
                 if func is None or func.start_ea != func_ea:
-                    print('Error: unable to located entry point "%s"' % func_name)
+                    utils.logger.error('Unable to located entry point "%s"' % func_name)
                 else:
-                    print('Info: retrieved entry point "%s"' % func_name)
+                    utils.logger.info('Retrieved entry point "%s"' % func_name)
 
                     imports.append(import_type(func.start_ea, *args))
 

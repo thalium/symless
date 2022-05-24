@@ -1,8 +1,10 @@
 import copy
 import ctypes
 import enum
+from typing import List
 
 import idaapi
+import idc
 
 ###################
 # CPU definitions #
@@ -115,22 +117,6 @@ def reg_string(reg) -> str:
     return X64_REGISTERS[reg]
 
 
-# alias small registers on full-width registers
-X64_REG_ALIASES = {
-    16: 0,  # al  -> rax
-    17: 1,  # cl  -> rcx
-    18: 2,  # dl  -> rdx
-    19: 3,  # bl  -> rbx
-    20: 0,  # ah  -> rax
-    21: 1,  # ch  -> rcx
-    22: 2,  # dh  -> rdx
-    23: 3,  # bh  -> rbx
-    25: 5,  # bpl -> rbp
-    26: 6,  # sil -> rsi
-    27: 7,  # dil -> rdi
-}
-
-
 INSN_MOVES = [idaapi.NN_mov, idaapi.NN_movups, idaapi.NN_movdqu]
 
 INSN_MATH = [idaapi.NN_add, idaapi.NN_or, idaapi.NN_sub]
@@ -227,6 +213,8 @@ def insn_itype_str(insn_itype) -> str:
         return "lea"
     if insn_itype == idaapi.NN_push:
         return "push"
+    if insn_itype == idaapi.NN_pop:
+        return "pop"
     if insn_itype in INSN_MOVES:
         return "mov"
     if insn_itype in INSN_MATH:
@@ -256,8 +244,8 @@ def op_dtype_str(dtype) -> str:
 
 
 # get instruction str representation
-def insn_str(insn) -> str:
-    return f"insn:{insn.ea:x} type:{insn.itype} {insn_itype_str(insn.itype)}"
+def insn_str(insn: idaapi.insn_t) -> str:
+    return f"insn:{insn.ea:x} type:{insn.itype} {insn_itype_str(insn.itype)} ({idc.generate_disasm_line(insn.ea, 0)})"
 
 
 # get operand str representation
@@ -386,7 +374,7 @@ class write_t:
         self.src = src
 
     def __repr__(self):
-        return "%r=%r" % (self.disp, self.src)
+        return "0x%x %r=%r" % (self.ea, self.disp, self.src)
 
 
 # memory read
@@ -397,7 +385,7 @@ class read_t:
         self.dst = dst
 
     def __repr__(self):
-        return "%r=%r" % (X64_REGISTERS[self.dst], self.disp)
+        return "0x%x %r=%r" % (self.ea, X64_REGISTERS[self.dst], self.disp)
 
 
 # memory access
@@ -408,7 +396,7 @@ class access_t:
         self.key = key
 
     def __repr__(self):
-        return "%r" % self.key
+        return "0x%x  key = %r n = %r" % (self.ea, self.key, self.n)
 
 
 # function return value and address
@@ -480,9 +468,9 @@ class state_t:
         self.previous = registers_t()  # registers after computing previous insn
         self.registers = registers_t()  # registers after computing current insn
 
-        self.writes = []  # list of write_t
-        self.reads = []  # list of read_t
-        self.access = []  # list of access_t
+        self.writes: List[write_t] = []  # list of write_t
+        self.reads: List[read_t] = []  # list of read_t
+        self.access: List[access_t] = []  # list of access_t
 
         self.call_type = None
         self.call_to = None
@@ -587,7 +575,7 @@ class state_t:
     # cpu state representation
     def __repr__(self):
         regs = []
-        for k in vars(self.registers):
+        for k in sorted(vars(self.registers)):
             regs.append(f"{k}:{getattr(self.registers, k)}")
         return " ".join(regs)
 

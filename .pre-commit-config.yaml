@@ -1,52 +1,54 @@
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.2.0
     hooks:
-    -   id: check-yaml
-    -   id: end-of-file-fixer
-    -   id: trailing-whitespace
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
 
-# isort
--   repo: https://github.com/pre-commit/mirrors-isort
-    rev: v5.10.1
-    hooks:
-    -   id: isort
-
-# black
--   repo: https://github.com/psf/black
+  # black
+  - repo: https://github.com/psf/black
     rev: 22.3.0
     hooks:
-    - id: black
-      args: # arguments to configure black
-        - --line-length=100
+      - id: black
+        args: # arguments to configure black
+          - --line-length=100
 
-# flake8
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  # isort
+  - repo: https://github.com/pre-commit/mirrors-isort
+    rev: v5.10.1
+    hooks:
+      - id: isort
+        args: #arguments to configure isort
+          - --profile=black
+
+  # flake8
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v2.3.0
     hooks:
-    - id: flake8
-      args: # arguments to configure flake8
-        # making flake8 line length compatible with black
-        - --max-line-length=100
-        - --max-complexity=18
-        - --select=B,C,E,F,W,T4,B9
+      - id: flake8
+        args: # arguments to configure flake8
+          # making flake8 line length compatible with black
+          - --max-line-length=100
+          - --max-complexity=18
+          - --select=B,C,E,F,W,T4,B9
 
-        # these are errors that will be ignored by flake8
-        # check out their meaning here
-        # https://flake8.pycqa.org/en/latest/user/error-codes.html
-        # E203 whitespace before ',', ';', or ':'
-        # E302 expected 2 blank lines, found 1
-        # E402 module level import not at top of file
-        # E501 line too long (82 > 79 characters)
-        # F403 'from foo import *' used; unable to detect undefined names
-        # F405 'foo' may be undefined, or defined from star imports
-        # W503 line break before binary operator
-        - --ignore= \
-          E203, \
-          E302, \
-          E402, \
-          E501, \
-          F403, \
-          F405, \
-          W503, \
-          # end
+          # these are errors that will be ignored by flake8
+          # check out their meaning here
+          # https://flake8.pycqa.org/en/latest/user/error-codes.html
+          # E203 whitespace before ',', ';', or ':'
+          # E302 expected 2 blank lines, found 1
+          # E402 module level import not at top of file
+          # E501 line too long (82 > 79 characters)
+          # F403 'from foo import *' used; unable to detect undefined names
+          # F405 'foo' may be undefined, or defined from star imports
+          # W503 line break before binary operator
+          - --ignore= \
+            E203, \
+            E302, \
+            E402, \
+            E501, \
+            F403, \
+            F405, \
+            W503, \
+            # end
