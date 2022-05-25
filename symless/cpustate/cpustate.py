@@ -14,6 +14,9 @@ from symless.cpustate import *
 MAX_PROPAGATION_RECURSION = 100
 
 
+ONE_OPERAND_INSTRUCTIONS = 0
+TWO_OPERAND_INSTRUCTIONS = 1
+
 # ignore instruction
 def handle_ignore(state: state_t, *args):
     pass
@@ -337,7 +340,7 @@ def handle_one_op_insn(state: state_t, insn: idaapi.insn_t, ops):
     handler, it_type = None, None
     op = ops[0]
 
-    for itype, optype, current in g_insn_handlers[0]:
+    for itype, optype, current in g_insn_handlers[ONE_OPERAND_INSTRUCTIONS]:
         if insn.itype in itype:
             it_type = insn.itype
             if check_types((op.type,), optype):
@@ -362,7 +365,7 @@ def handle_two_ops_insn(state: state_t, insn: idaapi.insn_t, ops):
     handler = None
     dst, src = ops[0], ops[1]
     known_type = None
-    for itypes, optype, current in g_insn_handlers[1]:
+    for itypes, optype, current in g_insn_handlers[TWO_OPERAND_INSTRUCTIONS]:
         if insn.itype in itypes:
             known_type = insn.itype
             if check_types((dst.type, src.type), optype):
@@ -395,7 +398,7 @@ def dbg_dump_state_insn(insn: state_t, ops: list, state: state_t):
 
 # process one instruction & update current state
 def process_instruction(state: state_t, insn: idaapi.insn_t):
-    ops = ida_utils.get_insn_ops(insn)
+    ops: list[idaapi.op_t] = ida_utils.get_insn_ops(insn)
     state.reset()
 
     op_len = len(ops)
@@ -645,7 +648,7 @@ class propagation_param_t:
     def __init__(self, injector: injector_t = injector_t(), depth: int = MAX_PROPAGATION_RECURSION):
         self.injector = injector
         self.depth = depth
-        self.visited = dict()  # ea -> function_t
+        self.visited: dict[int, function_t] = dict()  # ea -> function_t
 
     # is there a potential new state we need to visit
     def should_propagate(self, state: state_t, ea: int, from_callee: bool, is_jump: bool) -> bool:

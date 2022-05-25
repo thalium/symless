@@ -1,7 +1,6 @@
 import copy
 import ctypes
 import enum
-from typing import List
 
 import idaapi
 import idc
@@ -390,13 +389,13 @@ class read_t:
 
 # memory access
 class access_t:
-    def __init__(self, ea: int, n: int, key: disp_t):
+    def __init__(self, ea: int, op_index: int, key: disp_t):
         self.ea = ea
-        self.n = n
+        self.op_index = op_index
         self.key = key
 
     def __repr__(self):
-        return "0x%x  key = %r n = %r" % (self.ea, self.key, self.n)
+        return "0x%x  key = %r op_index = %r" % (self.ea, self.key, self.op_index)
 
 
 # function return value and address
@@ -468,9 +467,9 @@ class state_t:
         self.previous = registers_t()  # registers after computing previous insn
         self.registers = registers_t()  # registers after computing current insn
 
-        self.writes: List[write_t] = []  # list of write_t
-        self.reads: List[read_t] = []  # list of read_t
-        self.access: List[access_t] = []  # list of access_t
+        self.writes: list[write_t] = []  # list of write_t
+        self.reads: list[read_t] = []  # list of read_t
+        self.access: list[access_t] = []  # list of access_t
 
         self.call_type = None
         self.call_to = None
@@ -563,8 +562,8 @@ class state_t:
         self.reads.append(read_t(ea, disp, dst))
 
     # save access
-    def access_to(self, ea: int, n: int, key: disp_t):
-        self.access.append(access_t(ea, n, key))
+    def access_to(self, ea: int, op_index: int, key: disp_t):
+        self.access.append(access_t(ea, op_index, key))
 
     # save ret
     def save_ret(self, where: int):

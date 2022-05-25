@@ -154,11 +154,11 @@ if orig_branch is None:
     make()
     exit()
 
+make()
 stash()
 checkout(diff_commit)
 make()
 switch(orig_branch)
-make()
 stashpop()
 
 

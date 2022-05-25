@@ -1,5 +1,3 @@
-from typing import List, Tuple
-
 import idaapi
 import idautils
 import idc
@@ -68,11 +66,11 @@ def demangle(name: str, inf_attr=idc.INF_SHORT_DN) -> str:
 # every xref has to be fetch using an API call
 
 
-def get_references(address: int) -> List[int]:
+def get_references(address: int) -> list[int]:
     return [ref for ref in idautils.CodeRefsTo(address, 0)]
 
 
-def get_data_references(address: int) -> List[int]:
+def get_data_references(address: int) -> list[int]:
     return [ref for ref in idautils.DataRefsTo(address)]
 
 
@@ -276,7 +274,7 @@ def get_all_vtables():
 
 
 # vtable ea from already existing vtable struc
-def get_vtable_ea(vtable: idaapi.struc_t) -> Tuple[int, str]:
+def get_vtable_ea(vtable: idaapi.struc_t) -> tuple[int, str]:
     name = idaapi.get_struc_name(vtable.id)
     if not name.endswith(idaapi.VTBL_SUFFIX):
         return idaapi.BADADDR, name

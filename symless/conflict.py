@@ -49,7 +49,7 @@ class boundary_t:
 # record of conflicting models
 class belligerents_t:
     def __init__(self, candidates, vtable_conflict=False):
-        self.key = tuple(candidates)  # tuple of (sid, offset)
+        self.key: tuple[int, int] = tuple(candidates)  # tuple of (sid, offset)
         self.vtable_conflict = vtable_conflict
 
     def is_valid(self) -> bool:
@@ -77,7 +77,7 @@ class belligerents_t:
 # records all conflicts
 class conflicts_t:
     def __init__(self):
-        self.conflicts = dict()  # belligerents_t -> boundary_t
+        self.conflicts: dict[belligerents_t, boundary_t] = dict()  # belligerents_t -> boundary_t
 
     # build conflict key from all contestants
     def get_key(self, ea: int, n: int, candidates: set, ctx: model.context_t) -> belligerents_t:
@@ -97,7 +97,7 @@ class conflicts_t:
         except KeyError:
             self.conflicts[key] = boundary_t(boundary)
 
-    def get_all_conficts(self):
+    def get_all_conficts(self) -> collections.abc.Generator[belligerents_t, None, None]:
         for bell in self.conflicts:
             if bell.is_valid():
                 yield bell

@@ -1,5 +1,4 @@
 import pickle
-from typing import Tuple
 
 import idaapi
 
@@ -11,7 +10,7 @@ import symless.utils.utils as utils
 
 
 # convert an existing struct to a model
-def from_structure(struc: idaapi.struc_t, ea: int = None) -> Tuple[model.model_t, model.context_t]:
+def from_structure(struc: idaapi.struc_t, ea: int = None) -> tuple[model.model_t, model.context_t]:
     utils.logger.debug(f"{idaapi.get_struc_name(struc.id)} {hex(ea if ea is not None else 0)}")
     model_context: model.context_t
     with open(f"{idaapi.get_input_file_path()}_model.pickle", "rb") as f:
@@ -28,7 +27,7 @@ def from_structure(struc: idaapi.struc_t, ea: int = None) -> Tuple[model.model_t
 
 def from_structure_old(
     struc: idaapi.struc_t, context: model.context_t, ea: int = None
-) -> Tuple[model.model_t, model.context_t]:
+) -> tuple[model.model_t, model.context_t]:
 
     out = model.model_t(-1, ea, type=model.model_type.STRUCTURE_UKWN_SIZE)
     out.sid_ida = struc.id

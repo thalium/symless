@@ -1,7 +1,6 @@
 import bisect
 import collections
 import enum
-from typing import Dict, List, Set, Tuple
 
 import idaapi
 import idautils
@@ -33,7 +32,7 @@ class model_t:
             self.ea.append(ea)
 
         self.type = type
-        self.members = list()  # sorted list of (offset, size)
+        self.members: list[int, int] = list()  # sorted list of (offset, size)
         self.members_value = dict()  # dict of (offset) -> (type)
         self.operands = dict()  # (insn.ea, op_index) -> (shift, offset)
         self.symname = None
@@ -41,9 +40,9 @@ class model_t:
         # class ctor ea
         self.ctor_ea = None  # first method the object went in
         self.last_load = None  # last vtable load ea
-        self.selected_owner: Tuple(model_t, int) = None
-        self.potential_owners: Set(
-            Tuple(model_t, int)
+        self.selected_owner: tuple(model_t, int) = None
+        self.potential_owners: set(
+            tuple(model_t, int)
         ) = set()  # set of (model_t, offset) for vtables
         if self.is_vtable():
 
@@ -324,15 +323,15 @@ class function_t:
         self.ea = ea
         self.args_count = 0
 
-        self.potential_args: List[Set(Tuple(int, int))] = [
+        self.potential_args: list[set(tuple(int, int))] = [
             set() for i in range(cpustate.get_abi().get_arg_count())
-        ]  # List of sets of Tuple(sid, shift)
+        ]  # list of sets of tuple(sid, shift)
 
-        self.selected_args: List[Tuple(int, int)] = [
+        self.selected_args: list[tuple(int, int)] = [
             None for i in range(len(self.potential_args))
-        ]  # List of Tuple(sid, shift)
-        self.potential_rets: Set(Tuple(int, int)) = set()  # set of (sid, shift)
-        self.selected_ret: Tuple(int, int) = None
+        ]  # list of tuple(sid, shift)
+        self.potential_rets: set(tuple(int, int)) = set()  # set of (sid, shift)
+        self.selected_ret: tuple(int, int) = None
         self.is_virtual = False  # part of a vtable
         self.cc = None  # guessed calling convention
 
@@ -410,13 +409,12 @@ class function_t:
 # Record of models
 class context_t:
     def __init__(self):
-        self.models: List[model_t]
-        self.models = []  # list of model_t, may contain Nones for discarded models
-        self.allocators = set()  # set of allocators.allocator_t
-        self.all_operands = dict()  # (insn.ea, op_index) -> (op_boundary, set of models_sids)
-        self.vtables = dict()  # vtable_ea -> model_t
-        self.functions: Dict[int, function_t]
-        self.functions = dict()  # ea -> function_t
+        self.models: list[model_t] = []  # list of model_t, may contain Nones for discarded models
+        self.allocators: set(allocators.allocator_t) = set()  # set of allocators.allocator_t
+        self.all_operands: dict[tuple(int, int), tuple(int, set(int))] = dict()
+        # (insn.ea, op_index) -> (op_boundary, set of models_sids)
+        self.vtables: dict[int, model_t] = dict()  # vtable_ea -> model_t
+        self.functions: dict[int, function_t] = dict()  # ea -> function_t
 
     def add_model(self, model: model_t):
         model.sid = self.next_sid()
@@ -427,7 +425,7 @@ class context_t:
             if m.sid_ida == sid:
                 return m
 
-    def get_models(self) -> List[model_t]:
+    def get_models(self) -> list[model_t]:
         i, length = 0, len(self.models)
         while i < length:
             if isinstance(self.models[i], model_t):
@@ -495,7 +493,7 @@ class context_t:
     def has_function(self, ea: int) -> bool:
         return ea in self.functions
 
-    def update_functions(self, visited: dict):
+    def update_functions(self, visited: dict[int, cpustate.function_t]):
         utils.logger.debug("")
         for ea, function in visited.items():
             if not function.has_args():
@@ -566,7 +564,7 @@ def insert_struct_member(members: list, offset: int, size: int):
 """ Effective vtable selection """
 
 # count of xrefs to vtable functions
-def vtable_ref_count(vtable_ea) -> Tuple[int, int]:
+def vtable_ref_count(vtable_ea) -> tuple[int, int]:
     count, size = 0, 0
     for fea in ida_utils.vtable_members(vtable_ea):
         count += len(ida_utils.get_data_references(fea))
@@ -718,14 +716,14 @@ def handle_access(state: cpustate.state_t, ctx: context_t):
             ):
                 continue
             utils.logger.debug(
-                f"add_operand to {model.get_name()} at offset {hex(offset)} ea : {hex(access.ea)} n : {access.n} "
+                f"add_operand to {model.get_name()} at offset {hex(offset)} ea : {hex(access.ea)} n : {access.op_index} "
             )
-            model.add_operand(offset, access.ea, access.n, cur.shift)
+            model.add_operand(offset, access.ea, access.op_index, cur.shift)
 
             boundary = cpustate.ctypes.c_int32(disp.offset).value  # lower boundary
             if boundary >= 0:
                 boundary += disp.nbytes  # upper boundary
-            ctx.add_operand_for(access.ea, access.n, boundary, model)
+            ctx.add_operand_for(access.ea, access.op_index, boundary, model)
             utils.logger.debug(f"add_operand for model {model}")
 
 
@@ -831,7 +829,7 @@ class allocation_type(enum.Enum):
 # return True if the function is an allocator wrapper, otherwise builds the model
 def analyze_allocator(
     func: idaapi.func_t, allocator: allocators.allocator_t, call_ea: int, ctx: context_t
-) -> Tuple[bool, tuple]:
+) -> tuple[bool, tuple]:
     atype = allocation_type.BEFORE_ALLOCATION
     params = cpustate.propagation_param_t(depth=0)
 
@@ -917,7 +915,7 @@ def analyze_allocator_heirs(allocator: allocators.allocator_t, ctx: context_t):
 
 # Start building the model & locate memory allocators
 # from the given entry points (list of allocator functions)
-def analyze_allocations(imports: List[allocators.allocator_t], ctx: context_t):
+def analyze_allocations(imports: list[allocators.allocator_t], ctx: context_t):
     for i in imports:
         utils.logger.debug(i)
         analyze_allocator_heirs(i, ctx)
@@ -926,7 +924,7 @@ def analyze_allocations(imports: List[allocators.allocator_t], ctx: context_t):
 """ Ctors & dtors analysis (cpp classes only) """
 
 # is given function a ctor/dtor (does it load a vtable into a class given as first arg)
-def is_ctor(func: idaapi.func_t, load_addr: int) -> Tuple[bool, int]:
+def is_ctor(func: idaapi.func_t, load_addr: int) -> tuple[bool, int]:
     state = cpustate.state_t()
     params = cpustate.propagation_param_t(depth=0)
     cpustate.set_argument(cpustate.get_object_cc(), state, 0, cpustate.sid_t(0))

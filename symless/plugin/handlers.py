@@ -1,6 +1,5 @@
 import os
 import traceback
-from typing import Tuple
 
 import idaapi
 
@@ -85,7 +84,7 @@ class StructureChooser(idaapi.Choose):
 
 
 # returns the register pointed by given address + associated operand
-def target_op_reg(ea: int, op_num: int) -> Tuple[int, idaapi.op_t]:
+def target_op_reg(ea: int, op_num: int) -> tuple[int, idaapi.op_t | None, int]:
     insn = idaapi.insn_t()
     insn_len = idaapi.decode_insn(insn, ea)
     nb_ops = ida_utils.get_len_insn_ops(insn)

@@ -1,6 +1,5 @@
 import enum
 import re
-from typing import List, Tuple
 
 import idaapi
 
@@ -53,7 +52,7 @@ class allocator_t:
         pass
 
     # what type of allocation for given state + allocation size for STATIC_ALLOCATION
-    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
+    def on_call(self, state: cpustate.state_t) -> tuple[alloc_action_t, int]:
         return (alloc_action_t.UNDEFINED, 0)
 
     # for WRAPPED_ALLOCATOR action, does wrapper ret confirm it is a wrapper
@@ -82,7 +81,7 @@ class malloc_like_t(allocator_t):
         allocator_t.__init__(self, ea, "malloc")
         self.size_index = size_index
 
-    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
+    def on_call(self, state: cpustate.state_t) -> tuple[alloc_action_t, int]:
         is_jump = state.call_type == cpustate.call_type_t.JUMP
 
         # size parameter
@@ -122,7 +121,7 @@ class calloc_like_t(allocator_t):
         self.count_index = count_index
         self.size_index = size_index
 
-    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
+    def on_call(self, state: cpustate.state_t) -> tuple[alloc_action_t, int]:
         is_jump = state.call_type == cpustate.call_type_t.JUMP
 
         count_arg = cpustate.get_argument(
@@ -174,7 +173,7 @@ available_allocators = {"malloc": malloc_like_t, "calloc": calloc_like_t, "reall
 
 
 # parse calloc(0, 1) into (calloc_like_t, [0,1])
-def parse_allocator(declaration: str) -> Tuple[allocator_t, list]:
+def parse_allocator(declaration: str) -> tuple[allocator_t, list]:
     pattern = re.compile(r"^([a-zA-Z]+)(?:\((\s*[0-9]+\s*(?:\|\s*[0-9]+\s*)*)?\))?$")
     match = pattern.match(declaration)
     if match is None:
@@ -201,7 +200,7 @@ def parse_allocator(declaration: str) -> Tuple[allocator_t, list]:
 
 
 # reads config.csv data to find memory allocators in the binary, used as entry points
-def get_entry_points(config_path: str) -> List[allocator_t]:
+def get_entry_points(config_path: str) -> list[allocator_t]:
     imports = []
 
     try:
