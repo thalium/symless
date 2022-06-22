@@ -248,7 +248,7 @@ def insn_str(insn: idaapi.insn_t) -> str:
 
 
 # get operand str representation
-def op_str(op) -> str:
+def op_str(op: idaapi.op_t) -> str:
     registers = [idaapi.o_reg, idaapi.o_displ]
     reg_suffix = " " + reg_string(op.reg) if op.type in registers else ""
     return f"op: type:{op_type_str(op.type)} reg:{op.reg}{reg_suffix} val:{op.value:x} ea:{op.addr:x} dtype:{op.dtype:x}:{op_dtype_str(op.dtype)}"
@@ -405,7 +405,7 @@ class ret_t:
         self.where = where
 
     def __repr__(self):
-        return "ret:%s" % self.code
+        return "ret:%s at 0x%x" % (self.code, self.where)
 
 
 # function arguments count & calling convention guesser
@@ -473,7 +473,7 @@ class state_t:
 
         self.call_type = None
         self.call_to = None
-        self.ret = None
+        self.ret: ret_t = None
 
         # track the use of function's args
         self.arguments = None
@@ -537,7 +537,7 @@ class state_t:
         self.writes.clear()
         self.reads.clear()
         self.access.clear()
-        self.ret = None
+        self.ret: ret_t = None
         self.call_to = None
         self.call_type = None
         self.previous = copy.copy(self.registers)

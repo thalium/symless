@@ -709,8 +709,8 @@ def handle_access(state: cpustate.state_t, ctx: context_t):
             offset = cpustate.ctypes.c_int32(disp.offset + cur.shift).value
             if cur.shift < 0 or offset < 0:
                 continue
-            model: model_t
-            model = ctx.models[cur.sid]
+
+            model: model_t = ctx.models[cur.sid]
             if (model.size > 0 and cur.shift >= model.size) or not model.add_member(
                 offset, disp.nbytes
             ):
@@ -724,7 +724,7 @@ def handle_access(state: cpustate.state_t, ctx: context_t):
             if boundary >= 0:
                 boundary += disp.nbytes  # upper boundary
             ctx.add_operand_for(access.ea, access.op_index, boundary, model)
-            utils.logger.debug(f"add_operand for model {model}")
+            utils.logger.debug(f"add_operand for model {model.get_name()}")
 
 
 # Handle writes to struc members

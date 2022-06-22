@@ -323,7 +323,7 @@ def check_types(effective: tuple, expected: tuple) -> bool:
 
 
 # dump insn & operands
-def dump_insn(insn: idaapi.insn_t, ops):
+def dump_insn(insn: idaapi.insn_t, ops: list[idaapi.op_t]):
     utils.logger.log(5, insn_str(insn))
     for op in ops:
         utils.logger.log(5, "\t" + op_str(op))
@@ -390,7 +390,7 @@ def handle_two_ops_insn(state: state_t, insn: idaapi.insn_t, ops):
 
 
 # pretty print state and insn
-def dbg_dump_state_insn(insn: state_t, ops: list, state: state_t):
+def dbg_dump_state_insn(insn: idaapi.insn_t, ops: list[idaapi.op_t], state: state_t):
     utils.logger.log(5, "---------------------------------------------------------")
     dump_insn(insn, ops)
     utils.logger.log(5, state)
