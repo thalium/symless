@@ -211,15 +211,6 @@ class BuildHandler(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
-# inject sid into propagated state
-def injector(state: cpustate.state_t, ea: int, target_ea: int, target: str, value):
-    if ea == target_ea:
-        state.set_register_str(target, value)
-        utils.logger.debug(f"target reached {target} {value} new state => {state}")
-        # also set previous value, for when it is accessed for dst operand
-        state.set_register_str(target, value, 1)
-
-
 # propagate and build one struct
 def propagate_struct(
     struc: idaapi.struc_t, start_ea: int, target_reg: str, shift: int, dive: bool, on_dst_op: bool
@@ -228,7 +219,9 @@ def propagate_struct(
 
     # inject after update if on dst operand, before update if on src operand
     def inject_cb(state, ea):
-        return injector(state, ea, start_ea, target_reg, cpustate.sid_t(struc_model.sid, shift))
+        return cpustate.injector(
+            state, ea, start_ea, target_reg, cpustate.sid_t(struc_model.sid, shift)
+        )
 
     inject = cpustate.injector_t(inject_cb, not on_dst_op)
 

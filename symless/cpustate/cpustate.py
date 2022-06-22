@@ -843,3 +843,11 @@ def generate_state(func: idaapi.func_t, params: propagation_param_t = None, cc: 
 
     for (ea, state) in function_execution_flow(func, starting_state, params):
         yield ea, state
+
+
+# inject sid into propagated state
+def injector(state: state_t, ea: int, target_ea: int, target: str, value):
+    if ea == target_ea:
+        state.set_register_str(target, value)
+        # also set previous value, for when it is accessed for dst operand
+        state.set_register_str(target, value, 1)
