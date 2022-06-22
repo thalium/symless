@@ -54,11 +54,50 @@ class model_t:
             self.vtables = dict()  # offset -> list of vtable_sid
             self.members_names = []
 
+        self.need_handle_callers = False
+
     def get_guessed_names(self):
         if self.is_vtable():
             return []
         else:
             return self.members_names
+
+    def analyze_callers(self, func: idaapi.func_t, ctx: "context_t"):
+        if not self.need_handle_callers:
+            return
+
+        utils.logger.debug(
+            f"{self.get_name()} {self.last_load} {hex(self.ctor_ea) if self.ctor_ea is not None else 0}"
+        )
+
+        for xref_caller in ida_utils.get_references(func.start_ea):
+            utils.logger.debug(f"xref_caller : {hex(xref_caller)}")
+            # inject after update if on dst operand, before update if on src operand
+            xref_func = idaapi.get_func(xref_caller)
+            if xref_func is None:
+                continue
+
+            def inject_cb(state, ea):
+                return cpustate.injector(state, ea, xref_caller, "rax", cpustate.sid_t(self.sid, 0))
+
+            inject = cpustate.injector_t(inject_cb, True)
+
+            params = cpustate.propagation_param_t(inject, cpustate.MAX_PROPAGATION_RECURSION)
+
+            # propagate and update model
+            for ea, state in cpustate.generate_state(xref_func, params):
+                handle_state(ea, state, ctx)
+
+        """
+        # run all over crossrefs du ctor.ea
+        # inject au niveau du call avec sid dans rax => generate_state
+        #
+
+
+
+
+
+        """
 
     # add struct member
     def add_member(self, offset: int, size: int) -> bool:
@@ -866,9 +905,15 @@ def analyze_allocator(
                 return (True, wrapper_args)
 
         elif atype == allocation_type.STATIC_SIZE:  # handle model building
+            if state.ret is not None:
+                if isinstance(state.ret.code, cpustate.sid_t):
+                    if state.ret.code.sid == model.sid:
+                        model.need_handle_callers = True
             handle_state(ea, state, ctx)
 
     if model is not None:
+        model.analyze_callers(func, ctx)
+
         # analyze virtual functions
         analyze_model_vtables(model, params, ctx)
 
