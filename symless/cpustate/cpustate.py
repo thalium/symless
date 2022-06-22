@@ -181,6 +181,16 @@ def handle_add_reg_imm(state: state_t, insn: idaapi.insn_t, dst: idaapi.op_t, sr
         shift = src.value
     else:
         shift = -src.value
+
+    # TODO : Le probleme c'est qu'on ne sait pas a l'avance la taille de l'acces
+    # Pour l'instant on prend la taille de l'archi comme si c'etait un pointeur
+    # Mais si c'est un pointeur x64 sur un DWORD a l'interieur de la structure par exemple
+    #  alors la taille ne devrait pas etre la taille de l'archi
+    if src.type in [idaapi.o_imm]:
+        size = ida_utils.get_ptr_size()
+        if size == idaapi.get_dtype_size(dst.dtype):
+            state.access_to(insn.ea, 1, disp_t(dst.reg, shift, size))
+
     state.set_register(dst.reg, cur.offset(shift))
 
 
