@@ -396,6 +396,25 @@ def dbg_dump_state_insn(insn: idaapi.insn_t, ops: list[idaapi.op_t], state: stat
     utils.logger.log(5, state)
 
 
+def handle_struc_access(state: state_t, insn: idaapi.insn_t, ops: list[idaapi.op_t]):
+    # register any access through displ missed by custom handlers
+    for i, op in enumerate(ops):
+        if op.type in [idaapi.o_phrase, idaapi.o_displ]:
+            base = x64_base_reg(insn, op)
+            index = x64_index_reg(insn, op)
+
+            # validate base reg for parameters tracking
+            cur = state.get_previous_register(base)
+            state.arguments.validate(cur)
+
+            if index == x86_INDEX_NONE:  # ignore base + index*scale + offset
+                nbytes = idaapi.get_dtype_size(op.dtype)
+                state.access_to(insn.ea, i, disp_t(base, op.addr, nbytes))
+            else:  # validate index usage
+                cur = state.get_previous_register(index)
+                state.arguments.validate(cur)
+
+
 # process one instruction & update current state
 def process_instruction(state: state_t, insn: idaapi.insn_t):
     ops: list[idaapi.op_t] = ida_utils.get_insn_ops(insn)
@@ -416,22 +435,7 @@ def process_instruction(state: state_t, insn: idaapi.insn_t):
         utils.logger.error("unsupported instruction with %d operands:" % op_len)
         dump_insn(insn, ops)
 
-    # register any access through displ missed by custom handlers
-    for i, op in enumerate(ops):
-        if op.type in [idaapi.o_phrase, idaapi.o_displ]:
-            base = x64_base_reg(insn, op)
-            index = x64_index_reg(insn, op)
-
-            # validate base reg for parameters tracking
-            cur = state.get_previous_register(base)
-            state.arguments.validate(cur)
-
-            if index == x86_INDEX_NONE:  # ignore base + index*scale + offset
-                nbytes = idaapi.get_dtype_size(op.dtype)
-                state.access_to(insn.ea, i, disp_t(base, op.addr, nbytes))
-            else:  # validate index usage
-                cur = state.get_previous_register(index)
-                state.arguments.validate(cur)
+    handle_struc_access(state, insn, ops)
 
     dbg_dump_state_insn(insn, ops, state)
 
