@@ -29,16 +29,19 @@ def find_idat() -> Tuple[str, str]:
         ida_dir = os.path.abspath(unquote(os.environ["IDA_DIR"]))
     else:
         if sys.platform == "win32":
-            bases = [R"C:\Program Files\IDA Pro 7."]
+            bases = [R"C:\Program Files\IDA Pro "]
         else:
-            bases = ["%s/idapro-7." % os.environ["HOME"], "%s/Tools/idapro-7." % os.environ["HOME"]]
-        bestversion = 0
-        for base in bases:
-            for i in range(5, 9):
-                current = "%s%d" % (base, i)
-                if os.path.exists(current) and i > bestversion:
-                    ida_dir = current
-                    bestversion = i
+            bases = ["%s/idapro-." % os.environ["HOME"]]
+
+        for major in [8,7]:
+            for base in bases:
+                for minor in range(9,0,-1):
+                    current = "%s%d.%d" % (base, major, minor)
+                    if os.path.exists(current):
+                        ida_dir = current
+                        break
+            if ida_dir is not None:
+                break
 
     if ida_dir is None:
         stderr_print("Please specify an IDA installation location using IDA_DIR env")
