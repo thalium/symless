@@ -516,6 +516,7 @@ class context_t:
         return vtable
 
     def add_allocator(self, allocator: allocators.allocator_t):
+        utils.logger.debug(f"add allocator : {allocator}")
         self.allocators.add(allocator)
 
     def add_operand_for(self, ea: int, n: int, boundary: int, model: model_t):
@@ -868,7 +869,9 @@ class allocation_type(enum.Enum):
 # return True if the function is an allocator wrapper, otherwise builds the model
 def analyze_allocator(
     func: idaapi.func_t, allocator: allocators.allocator_t, call_ea: int, ctx: context_t
+
 ) -> tuple[bool, tuple]:
+    utils.logger.debug(f"is it an allocator ? {allocator}")
     atype = allocation_type.BEFORE_ALLOCATION
     params = cpustate.propagation_param_t(depth=0)
 
@@ -876,8 +879,10 @@ def analyze_allocator(
     wrapper_args = None
 
     for ea, state in cpustate.generate_state(func, params, cpustate.get_default_cc()):
+        utils.logger.debug(f"ea : {hex(ea)} state : {state} atype {atype}")
         if atype == allocation_type.BEFORE_ALLOCATION and ea == call_ea:
             action, size = allocator.on_call(state)
+            utils.logger.debug(f"action {action} size {size}")
 
             if action == allocators.alloc_action_t.JUMP_TO_ALLOCATOR:
                 return (True, size)
@@ -929,6 +934,7 @@ def analyze_allocator(
 # Analyze the children of a memory allocator
 def analyze_allocator_heirs(allocator: allocators.allocator_t, ctx: context_t):
     if allocator in ctx.allocators:  # avoid inifine recursion if crossed xrefs
+        utils.logger.debug("allocator already in allocators // avoid infinite loop")
         return
 
     ctx.add_allocator(allocator)

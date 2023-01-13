@@ -53,5 +53,8 @@ def start_analysis(config_path):
 
         utils.logger.info("%d structures generated" % total)
 
-        with open(f"{idaapi.get_input_file_path()}_model.pickle", "wb") as f:
-            pickle.dump(model_context, f)
+        try:
+            with open(f"{idaapi.get_input_file_path()}_model.pickle", "wb") as f:
+                pickle.dump(model_context, f)
+        except Exception as e:
+            print("WARNING model not saved :", repr(e))

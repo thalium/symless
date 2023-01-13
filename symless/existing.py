@@ -1,3 +1,4 @@
+import os
 import pickle
 
 import idaapi
@@ -13,8 +14,11 @@ import symless.utils.utils as utils
 def from_structure(struc: idaapi.struc_t, ea: int = None) -> tuple[model.model_t, model.context_t]:
     utils.logger.debug(f"{idaapi.get_struc_name(struc.id)} {hex(ea if ea is not None else 0)}")
     model_context: model.context_t
-    with open(f"{idaapi.get_input_file_path()}_model.pickle", "rb") as f:
-        model_context = pickle.load(f)
+    if os.path.exists(f"{idaapi.get_input_file_path()}_model.pickle"):
+        with open(f"{idaapi.get_input_file_path()}_model.pickle", "rb") as f:
+            model_context = pickle.load(f)
+    else:
+        model_context = model.context_t()
 
     for m in model_context.models:
         if m.sid_ida == struc.id:

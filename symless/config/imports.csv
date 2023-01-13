@@ -26,6 +26,7 @@ msvcrt, realloc, realloc # use realloc as entry point ?
 # Windows API set schema
 api-ms-win-core-heap-l1-1-0, HeapAlloc, malloc(2)
 api-ms-win-core-heap-l1-1-0, HeapReAlloc, malloc(3)
+api-ms-win-crt-private-l1-1-0, _o_malloc, malloc
 
 # Windows VirtualAlloc
 kernel32, VirtualAlloc, malloc(1)

@@ -61,10 +61,15 @@ class SymlessPlugin(idaapi.plugin_t):
 
         self.load()
 
+        pathConfig = "symless/config/imports.csv"
+        # Location of imports.csv relatively depends on the mode plugin vs cmd_line
+        if not os.path.exists(
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), pathConfig)
+        ):
+            pathConfig = os.path.join("..", pathConfig)
+
         symless_main.start_analysis(
-            os.path.join(
-                os.path.dirname(os.path.realpath(__file__)), "../symless/config/imports.csv"
-            )
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), pathConfig)
         )
 
 
