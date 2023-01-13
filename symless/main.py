@@ -57,4 +57,4 @@ def start_analysis(config_path):
             with open(f"{idaapi.get_input_file_path()}_model.pickle", "wb") as f:
                 pickle.dump(model_context, f)
         except Exception as e:
-            print("WARNING model not saved :",  repr(e))
+            print("WARNING model not saved :", repr(e))

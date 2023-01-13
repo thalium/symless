@@ -174,6 +174,7 @@ class realloc_t(malloc_like_t):
     def __init__(self, ea: int, size_index: int = 1):
         allocator_t.__init__(self, ea, "realloc")
         self.size_index = size_index
+
     def __repr__(self):
         return f"realloc_like_t : [0x{self.ea:x}] - {ida_utils.demangle(idaapi.get_name(self.ea))} ({self.get_name()}) index : ({self.size_index})"
 

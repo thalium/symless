@@ -33,9 +33,9 @@ def find_idat() -> Tuple[str, str]:
         else:
             bases = ["%s/idapro-." % os.environ["HOME"]]
 
-        for major in [8,7]:
+        for major in [8, 7]:
             for base in bases:
-                for minor in range(9,0,-1):
+                for minor in range(9, 0, -1):
                     current = "%s%d.%d" % (base, major, minor)
                     if os.path.exists(current):
                         ida_dir = current

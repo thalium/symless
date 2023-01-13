@@ -1,8 +1,8 @@
+import os
 import pickle
 from typing import Tuple
 
 import idaapi
-import os
 
 import symless.model as model
 import symless.utils.ida_utils as ida_utils
