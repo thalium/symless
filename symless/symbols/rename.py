@@ -47,7 +47,9 @@ def find_structure_name(struc: generation.structure_t) -> Collection[str]:
         _, vtable = field.get_structure()
         derived, _ = get_classnames_from_vtable(vtable.ea)
         if derived is not None:
-            add_candidate_name(names, (2, struc_name_cleanup(derived)))
+            # names from first vtable are more accurate than names from ctors
+            # set best preference (0)
+            add_candidate_name(names, (0, struc_name_cleanup(derived)))
 
     names.sort(key=lambda k: k[0])
     return [n for _, n in names]

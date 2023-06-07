@@ -634,7 +634,7 @@ class vtbl_entry_t(cst_entry_t):
         return None
 
     def find_name(self) -> Tuple[Optional[str], int]:
-        return symbols.get_vtable_name_from_ctor(self.ea), 1
+        return symbols.get_vtable_name_from_ctor(self.ea), 0
 
     def entry_id(self) -> str:
         return f"ep_0x{self.ea:x}_vtbl"
