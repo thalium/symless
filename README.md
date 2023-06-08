@@ -1,19 +1,49 @@
 # Symless
 
-Automatic structures identification & creation plugin for IDA. Symless facilitates the analyst's work by doing a pre-analysis of the IDB, i.e. identifying structures, c++ classes, vtables and propagating that information.
+Automatic structures recovering plugin for IDA. Able to reconstruct structures/classes and virtual tables used in a binary.
 
 ### Features
-* Automatic creation of identified structures (c++ class, vtable and others)
-* Xrefs linking structure's fields to where they are used
+* Automatic creation of identified structures (c++ classes, virtual tables and others)
+* Xrefs on structures usages
 * Functions typing using gathered information
 
-## Usage
-### Entry points definition
-You can define memory allocators that are used to reserve space for a structure. These are used to find structure creations in a binary.
+Two modes are available: **Pre-Analysis** and **Plugin**.
 
-Define those entry points in [imports.csv](symless/config/imports.csv). Syntax is discussed there.
+## Plugin mode
+Interactive IDA plugin. Allow to create/complete a structure by propagating its information from an entry point specified by the user.
 
-### Command line
+### Installation
+```
+$ python plugin/install.py [-u]
+```
+
+**Manual installation**: copy the [symless](symless/) directory and [symless_plugin.py](plugin/symless_plugin.py) into IDA plugins folder.
+
+### Usage
+While in IDA disassembly view:
+- Right-click a register that contains a structure pointer
+- Select **Propagate structure**
+- Select which structure & shift to apply
+
+Symless will then propagate the structure, build it and type untyped functions / operands with the harvested information. This action can be undone with **Ctrl-Z**. A new structure can be created, an existing one can be completed.
+
+## Pre-Analysis mode
+
+### Before use
+
+#### Specify your IDA installation:
+
+```
+export IDA_DIR="$HOME/idapro-M.m"
+```
+
+#### Edit the config file to suit your case:
+
+Specify the memory allocation functions used in your executable in the [imports.csv](symless/config/imports.csv) file. Syntax is discussed there.
+
+Symless uses those to find structures creations from memory allocations. C++ classes can also be retrieved from their virtual tables.
+
+### Usage
 ```
     $ python3 symless.py [-c config.csv] <target(s)>
 ```
@@ -23,9 +53,7 @@ Define those entry points in [imports.csv](symless/config/imports.csv). Syntax i
 
 Symless will create a new IDA base when given an executable as an argument. Otherwise keep in mind it may overwrite user-modifications on existing bases.
 
-If it is unable to find your IDA installation, set up the `IDA_DIR` env to point to it (point to the folder containing the `idat` executable).
-
-Once done, the IDA base will be populated with information about identified structures.
+Once done the IDA base will be populated with information about identified structures.
 
 ## Support
 Both stripped and non-stripped binaries are supported. Symbols are only used to name the created structures.
@@ -38,26 +66,5 @@ Both stripped and non-stripped binaries are supported. Symbols are only used to 
 
 **IDA Pro 7.6** or newer &  **python 3**
 
-## Approach
-Structures are identified from two entry points:
-
-* By locating memory allocations
-* By locating c++ constructors
-
-Memory allocators are defined by the user in the configuration file. C++ constructors are located from their vtable(s), found by scanning the executable.
-
-# Interactive plugin
-Interactive version running as an IDA plugin.
-
-The user defines a register containing a pointer on a structure, Symless propagates the information and automatically builds the structure.
-
-## Installation
-Copy the [symless](symless/) directory and [symless_plugin.py](plugin/symless_plugin.py) into IDA plugins folder.
-
-## Usage
-While in IDA disassembly view:
-- Right click on a register containing a structure pointer
-- Select **Propagate structure**
-- Select which structure & shift to apply
-
-Symless will then propagate the structure, build it and type untyped functions / operands with the harvested information. This action can be undone with **Ctrl-Z**.
+## Disclaimer
+Symless is still in development and might not fit every use cases.
