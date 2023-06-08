@@ -1,7 +1,7 @@
 import copy
 import ctypes
 import logging
-from typing import Dict, Iterator, List, Tuple
+from typing import Collection, Dict, Iterator, List, Set, Tuple
 
 import idaapi
 
@@ -509,62 +509,42 @@ def get_previous_state(flow, idx, prev_states) -> state_t:
     return select_state(predecessors).copy()
 
 
-def pop_node(nodes, visited):
-    min_node = idaapi.BADADDR
-    for node, (_, allpreds, preds) in nodes.items():
-        if len(preds) == 0:
-            return node
+# next node to visit from given list
+def pop_node(nodes: Collection[Tuple[int, Set[int]]], visited: Set[int]) -> int:
+    # default: next node in graph flow
+    idx = 0
 
-        # if we don't find any suitable node
-        # take the lower effective address
-        # from those who already have a visited predecessor
-        minpreds = [x for x in filter(lambda x: x in visited, allpreds)]
-        if not len(minpreds):
-            continue
+    # find a block with all its predecessor visited
+    sel = [i for i, (_, preds) in enumerate(nodes) if len(preds.difference(visited)) == 0]
 
-        min_node = min(min_node, node)
+    if len(sel):
+        idx = sel[0]
 
-    if min_node == idaapi.BADADDR:
-        # raise BaseException("unexpected graph")
-        # undecided, drop the remaining nodes
-        return idaapi.BADADDR
+    # find first node in nodes with a visited pred
+    else:
+        sel = [i for i, (_, preds) in enumerate(nodes) if len(visited.intersection(preds)) > 0]
 
-    return min_node
+        if len(sel):
+            idx = sel[0]
 
+    node = nodes[idx][0]
+    visited.add(node)  # update visited
+    del nodes[idx]  # remove node from list
 
-def discard_pred(nodes, pred):
-    for _, (_, _, preds) in nodes.items():
-        try:
-            preds.remove(pred)
-        except KeyError:
-            pass
+    return node
 
 
-def walk_topological(flow):
+def walk_topological(flow) -> Iterator[int]:
     # generate a list of nodes with predecessors
-    nodes = {}
-    for node in range(flow.size()):
-        preds = set()
-        npred = flow.npred(node)
-        for j in range(npred):
-            pred = flow.pred(node, j)
-            # ignore cycles on the same node
-            if pred != node:
-                preds.add(pred)
-        allpreds = copy.deepcopy(preds)
-        nodes[node] = hex(flow[node].start_ea), allpreds, preds
+    nodes: Collection[Tuple[int, Set[int]]] = list()
+    for i in range(flow.size()):
+        # all predecessors, excluding current node
+        preds = set([flow.pred(i, j) for j in range(flow.npred(i)) if flow.pred(i, j) != i])
+        nodes.append((i, preds))
 
-    # iterate on nodes without known predecessors
-    visited = set()
+    visited: Set[int] = set()
     while len(nodes):
-        node = pop_node(nodes, visited)
-        if node == idaapi.BADADDR:
-            return
-
-        del nodes[node]
-        visited.add(node)
-        discard_pred(nodes, node)
-        yield node
+        yield pop_node(nodes, visited)
 
 
 # a visited function
@@ -762,8 +742,9 @@ def function_data_flow(
 
     try:
         entry = flow[next(nodes)]  # function's entry block
-    except StopIteration:
-        return  # function has no block
+    except StopIteration:  # function has no block
+        utils.g_logger.error(f"No entry block for function 0x{fct.start_ea}")
+        return
 
     insn = idaapi.insn_t()  # current instruction
     next_instruction(entry.start_ea, entry, insn)
