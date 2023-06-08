@@ -160,8 +160,8 @@ def run_ida(ida_install: tuple, input_file: str, script: str, script_args: List[
     idat = ida_install[1] if idb_file.endswith(".i64") else ida_install[0]
     cmd, log_file = craft_ida_command(idat, idb_file, script, script_args)
 
-    # TODO : Stderr is not deontological.. please find a solution
-    # These logs need to not be present in the dump for the diff run during the test
+    # TODO: stderr is a dirty hack, find a better solution
+    # used here to ignore these information when piping script output
     stderr_print("Running IDA script..")
     stderr_print("* IDAT  : %s" % idat)
     stderr_print("* Script: %s%s" % (script, "" if len(script_args) == 0 else ' ("%s")' % '", "'.join(script_args)))
