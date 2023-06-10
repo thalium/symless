@@ -72,6 +72,7 @@ def find_idat() -> Tuple[str, str]:
     else:
         print(f'Using IDA installation: "{ida_dir}"')
 
+
     suffix = ".exe" if sys.platform == "win32" else ""
     ida32 = os.path.join(ida_dir, "idat" + suffix)
     ida64 = os.path.join(ida_dir, "idat64" + suffix)

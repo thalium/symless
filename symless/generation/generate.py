@@ -4,19 +4,21 @@ import symless.allocators as allocators
 import symless.existing as existing
 import symless.model.entrypoints as entrypoints
 import symless.symbols as symbols
+from symless.utils.utils import check_compatibility
 from symless.generation import *
 
 STRUC_DIR = "Symless"
 
-
 # make symless structures directory
 def make_structures_dir():
-    root = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
 
+    if not check_compatibility():
+        return
+    
+    root = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
     err = root.mkdir(STRUC_DIR)
     if err not in (idaapi.DTE_OK, idaapi.DTE_ALREADY_EXISTS):
         utils.g_logger.error(f'Could not create {STRUC_DIR} structures directory: "{root.errstr(err)}"')
-
 
 # create an empty IDA structure used to contain given struc
 def make_IDA_structure(struc: structure_t):
@@ -29,6 +31,14 @@ def make_IDA_structure(struc: structure_t):
     ida_sid = struc.find_existing()
     if ida_sid != idaapi.BADADDR:
         utils.g_logger.info(f'Re-using existing structure for model "{name}"')
+        return
+    
+    if not check_compatibility():
+        # create new structure
+        struc.set_existing(idaapi.add_struc(-1, name, False))
+        if struc.ida_sid == idaapi.BADADDR:
+            utils.g_logger.error(f'Could not create empty structure "{name}"')
+
         return
 
     root = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
@@ -44,7 +54,6 @@ def make_IDA_structure(struc: structure_t):
             utils.g_logger.warning(
                 f'Could not move structure "{name}" into {STRUC_DIR} directory: "{root.errstr(err)}"'
             )
-
 
 # do we decide to type IDA base we given entry data
 def should_type_entry(entry: entrypoints.entry_t, ctx: entrypoints.context_t) -> bool:

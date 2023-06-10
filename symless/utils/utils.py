@@ -5,6 +5,14 @@ import symless
 import symless.config as config
 
 
+
+def check_compatibility():
+    try:
+        from idaapi import get_std_dirtree
+        return True
+    except ImportError:
+        return False
+
 def get_logger(level: int = config.g_settings.log_level):
     logger = logging.getLogger("symless")
     logger.setLevel(level)

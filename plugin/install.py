@@ -30,10 +30,12 @@ def install(where: str, symlink: bool) -> int:
     for file, _ in TO_COPY:
         base = os.path.basename(file)
         if os.path.exists(os.path.join(where, base)):
-            print(f'Error: found existing "{base}" in "{where}"')
-            print("Aborting installation")
-            return 1
-
+            dst = os.path.join(where, os.path.basename(file))
+            if os.path.isdir(dst):
+                shutil.rmtree(dst)
+            else:
+                os.remove(dst)
+            
     # install
     for file, is_dir in TO_COPY:
         src = os.path.abspath(os.path.join(ROOT_DIR, file))
