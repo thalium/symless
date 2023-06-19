@@ -4,6 +4,7 @@ from typing import Optional, Tuple, Union
 import idaapi
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+import symless
 import symless.cpustate as cpustate
 import symless.cpustate.arch as arch
 import symless.generation.generate as generate
@@ -313,6 +314,10 @@ class BuilderMainWid(QtWidgets.QDialog):
         # window's properties
         self.setWindowTitle(WINDOW_TITLE)
         self.setWhatsThis("You may use this form to automatically rebuild structures using Symless")
+
+        # window's icon
+        icon = QtGui.QIcon(os.path.join(os.path.abspath(symless.__path__[0]), "resources", "champi.png"))
+        self.setWindowIcon(icon)
 
         # set focused widget
         f_tab.give_focus()
