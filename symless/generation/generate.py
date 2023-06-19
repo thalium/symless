@@ -11,8 +11,10 @@ STRUC_DIR = "Symless"
 
 # make symless structures directory
 def make_structures_dir():
-    root = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
+    if not ida_utils.can_create_folder():
+        return
 
+    root = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
     err = root.mkdir(STRUC_DIR)
     if err not in (idaapi.DTE_OK, idaapi.DTE_ALREADY_EXISTS):
         utils.g_logger.error(f'Could not create {STRUC_DIR} structures directory: "{root.errstr(err)}"')
@@ -31,14 +33,14 @@ def make_IDA_structure(struc: structure_t):
         utils.g_logger.info(f'Re-using existing structure for model "{name}"')
         return
 
-    root = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
-
     # create new structure
     struc.set_existing(idaapi.add_struc(-1, name, False))
     if struc.ida_sid == idaapi.BADADDR:
         utils.g_logger.error(f'Could not create empty structure "{name}"')
-    else:
+
+    elif ida_utils.can_create_folder():
         # move structure to symless dir
+        root = idaapi.get_std_dirtree(idaapi.DIRTREE_STRUCTS)
         err = root.rename(name, f"{STRUC_DIR}/{name}")
         if err != idaapi.DTE_OK:
             utils.g_logger.warning(

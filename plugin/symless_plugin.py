@@ -16,6 +16,8 @@ class SymlessPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_MOD | idaapi.PLUGIN_PROC  # | idaapi.PLUGIN_HIDE
     comment = "Symless interactive plugin"
     wanted_name = "Symless"
+    help = ""  # not used, IDA < 7.6 compatibility
+    wanted_hotkey = ""  # not used, IDA < 7.6 compatibility
 
     # find & initialize all extensions
     def init(self) -> idaapi.plugmod_t:
