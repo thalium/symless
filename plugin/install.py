@@ -27,15 +27,15 @@ TO_COPY = [("symless_plugin.py", False), ("../symless", True)]
 
 def install(where: str, symlink: bool) -> int:
     # check no installation is present
-    for file, _ in TO_COPY:
-        base = os.path.basename(file)
-        if os.path.exists(os.path.join(where, base)):
-            dst = os.path.join(where, os.path.basename(file))
-            if os.path.isdir(dst):
-                shutil.rmtree(dst)
+    for file, is_dir in TO_COPY:
+        filepath = os.path.join(where, os.path.basename(file))
+        if os.path.exists(filepath):
+            print(f"Replacing existing {'directory' if is_dir else 'file'} \"{filepath}\"")
+            if is_dir:
+                shutil.rmtree(filepath)
             else:
-                os.remove(dst)
-            
+                os.remove(filepath)
+
     # install
     for file, is_dir in TO_COPY:
         src = os.path.abspath(os.path.join(ROOT_DIR, file))

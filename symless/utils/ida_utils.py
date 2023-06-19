@@ -465,3 +465,14 @@ def get_len_insn_ops(insn: idaapi.insn_t) -> int:
             break
         res += 1
     return res
+
+
+""" Misc """
+
+
+# does IDA support structures folders
+def can_create_folder() -> bool:
+    try:
+        return idaapi.get_std_dirtree is not None
+    except AttributeError:
+        return False
