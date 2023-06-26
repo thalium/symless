@@ -3,6 +3,7 @@ import time
 import idaapi
 
 import symless.allocators as allocators
+import symless.config as config
 import symless.cpustate.arch as arch
 import symless.generation.generate as generate
 import symless.generation.structures as structures
@@ -16,6 +17,12 @@ def start_analysis(config_path):
     if not arch.is_arch_supported():
         utils.g_logger.error("Unsupported arch (%s) or filetype" % arch.get_proc_name())
         return
+
+    # rebase if required
+    if config.g_settings.rebase_db:
+        err = idaapi.rebase_program(-idaapi.get_imagebase(), idaapi.MSF_FIXONCE)
+        if err != idaapi.MOVE_SEGM_OK:
+            utils.g_logger.error(f"Unable to rebase program: {err}")
 
     # initial ida autoanalysis
     start = time.time()

@@ -18,6 +18,7 @@ class Settings:
     def __init__(self):
         self.log_level = LOG_LEVEL_DEFAULT
         self.debug = False
+        self.rebase_db = True  # set imagebase to 0 before generating structures (& names)
 
         # symless folder path
         self.root = os.path.realpath(os.path.join(os.path.dirname(inspect.getsourcefile(lambda: 0)), ".."))
