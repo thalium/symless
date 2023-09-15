@@ -10,7 +10,14 @@ Automatic structures recovering plugin for IDA. Able to reconstruct structures/c
 Two modes are available: **Pre-Analysis** and **Plugin**.
 
 ## Plugin mode
-Interactive IDA plugin. Allow to create/complete a structure by propagating its information from an entry point specified by the user.
+Interactive IDA plugin. Uses static analysis from an entry point selected by the user to build and propagate a structure.
+
+<p align="center">
+    <kbd>
+        <img src="img/plugin-demo.gif" alt="Plugin demo"/>
+    </kbd>
+</p>
+
 
 ### Installation
 ```
