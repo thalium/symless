@@ -290,7 +290,7 @@ class BuilderMainWid(QtWidgets.QDialog):
     def __init__(self, parent: QtWidgets.QWidget = None):
         super().__init__(parent)
 
-        # property to gather using this form
+        # properties to gather using this form
         self.dive: bool = False
         self.struc: Union[int, str] = idaapi.BADADDR
         self.shift: int = 0
