@@ -1,5 +1,4 @@
 {
-    "log_level": 20,
-    "debug": true,
+    "log_level": 30,
     "rebase_db" : true
 }

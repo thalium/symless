@@ -1,7 +1,17 @@
-import collections
-import copy
-from typing import Any, Collection, Dict, Iterator, Optional, Set, Tuple
+from collections import defaultdict, deque
+from typing import (
+    Any,
+    Collection,
+    Dict,
+    Generator,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+)
 
+import ida_hexrays
 import idaapi
 
 import symless.allocators as allocators
@@ -10,6 +20,7 @@ import symless.generation as generation
 import symless.symbols as symbols
 import symless.utils.ida_utils as ida_utils
 import symless.utils.utils as utils
+import symless.utils.vtables as vtables
 
 
 # a field's type & potential value
@@ -17,14 +28,14 @@ class ftype_t:
     def __init__(self, value: cpustate.absop_t):
         self.value = value
 
-    # should we propagate this type when one of its values is read from a structure's field
+    # should we propagate the field value when read
     def should_propagate(self) -> bool:
         return False
 
     # get value to use when propagating with cpustate
     def get_propagated_value(self) -> cpustate.absop_t:
         if self.should_propagate():
-            return copy.copy(self.value)  # copy to be sure not to mess with arguments tracking
+            return self.value
         return None
 
     def __eq__(self, other) -> bool:
@@ -38,7 +49,6 @@ class ftype_t:
 
 
 # structure pointer type
-# does not record shifted struc ptr
 class ftype_struc_t(ftype_t):
     def __init__(self, entry: "entry_t"):
         super().__init__(cpustate.sid_t(entry.id))
@@ -68,7 +78,7 @@ class field_t:
     def __init__(self, offset: int):
         self.offset = offset
         self.size: int = 0  # bitfield of possible sizes
-        self.type: Collection[ftype_t] = collections.deque()  # list of affected types, in propagation's order
+        self.type: deque[ftype_t] = deque()  # list of affected types, in propagation's order
 
     # add a type to the field's possible types list
     def set_type(self, type: ftype_t):
@@ -86,11 +96,14 @@ class field_t:
 
     # get all possible field's sizes
     def get_size(self) -> Collection[int]:
-        out = collections.deque()
+        out = deque()
         for i in range(8):
             if self.size & (1 << i):
                 out.append(pow(2, i))
         return out
+
+    def __str__(self) -> str:
+        return f"field_{self.offset:#x}:{self.size:#x}"
 
 
 # records the data flow of a structure in a basic block
@@ -99,7 +112,7 @@ class field_t:
 class block_t:
     def __init__(self, owner: "entry_t", id: int = 0):
         self.owner = owner
-        self.fields: dict[int, field_t] = dict()  # fields defined in the block & their types
+        self.fields: Dict[int, field_t] = dict()  # fields defined in the block & their types
 
         # block index in owner's blocks list
         self.id = id
@@ -175,15 +188,11 @@ class block_t:
 
         return self.get_field(offset).get_type() if (ftype is None and self.has_field(offset)) else ftype
 
-    # get the flow of blocks following this one
-    # yields (shift, block)
-    def node_flow(self) -> Iterator[Tuple[int, "block_t"]]:
-        yield (0, self)
+    def __eq__(self, other) -> bool:
+        return isinstance(other, block_t) and other.id == self.id
 
-        if self.has_callee():
-            shift, callee = self.get_callee()
-            for c_shift, c_block in callee.node_flow():
-                yield (shift + c_shift, c_block)
+    def __hash__(self) -> int:
+        return self.id
 
 
 # data flow entrypoints
@@ -196,14 +205,15 @@ class entry_t:
     # this type of ep can have children
     can_ramificate = True
 
-    def __init__(self, ea: int):
+    def __init__(self, ea: int, sub_ea: int = 0):
         self.ea = ea  # entry address
+        self.sub_ea = sub_ea  # index of the sub minsn the entry is for
         self.id = -1  # entry identifier
 
         # for entrypoints defining a structure (root ep)
         self.struc_id = -1
 
-        # structure associated to this entrypoint
+        # structure associated with this entrypoint
         # the structure we will use to type this ep
         self.struc: Optional[generation.structure_t] = None
         self.struc_shift = 0
@@ -211,14 +221,15 @@ class entry_t:
         # data flow injection parameters
         self.to_analyze = True  # yet to analyze
 
-        # list of instruction's operands associated with this ep
-        self.operands: dict[Tuple[int, int], int] = dict()  # (insn.ea, op_index) -> (shift)
+        # list of operands accessing this ep fields
+        # a single op might reference multiple fields (offsets), like in STP, STM arm insns
+        self.operands: Dict[Tuple[int, int], Collection[int]] = defaultdict(list)  # (ea, reg_id) -> [offsets]
 
         # list of the entries that can precede this one in a data flow
-        self.parents: Collection[Tuple[int, entry_t]] = collections.deque()
+        self.parents: Collection[Tuple[int, entry_t]] = deque()
 
         # list of entries we want to analyze following this one
-        self.children: Collection[Tuple[int, entry_t]] = collections.deque()
+        self.children: Collection[Tuple[int, entry_t]] = deque()
 
         # entrypoint size
         self.bounds: Optional[Tuple[int, int]] = None
@@ -239,6 +250,7 @@ class entry_t:
     def set_structure(self, shift: int, struc: "generation.structure_t"):
         self.struc = struc
         self.struc_shift = shift
+        struc.has_xrefs |= self.has_operands()
 
     # get the structure associated with the entry
     def get_structure(self) -> Tuple[int, "generation.structure_t"]:
@@ -297,13 +309,16 @@ class entry_t:
 
         return self.bounds
 
-    # associate operand at (ea, n) to this entrypoint, for given shift
-    def add_operand(self, ea: int, n: int, shift: int):
-        self.operands[(ea, n)] = shift
+    # associated accessed operand with this ep
+    def add_operand(self, ea: int, off: int, regid: int):
+        self.operands[(ea, regid)].append(off)
 
-    def get_operands(self) -> Iterator[Tuple[int, int, int]]:
-        for (ea, n), shift in self.operands.items():
-            yield (ea, n, shift)
+    def get_operands(self) -> Generator[Tuple[int, int, Collection[int]], None, None]:
+        for (ea, regid), offs in self.operands.items():
+            yield (ea, regid, offs)
+
+    def has_operands(self) -> bool:
+        return len(self.operands) > 0
 
     # does the given node precede this node in the data flow
     def has_parent(self, parent: "entry_t") -> bool:
@@ -339,15 +354,17 @@ class entry_t:
 
     # get node's parents
     # yields (shift, parent)
-    def get_parents(self) -> Iterator[Tuple[int, "entry_t"]]:
+    def get_parents(self) -> Generator[Tuple[int, "entry_t"], None, None]:
         for off, p in self.parents:
             yield (off, p)
 
     # get node's children
     # if all is set, returns following children + end blocks callee children
     # else only returns following children
-    def get_children(self, all: bool = False) -> Iterator[Tuple[int, "entry_t"]]:
+    def get_children(self, all: bool = False) -> Generator[Tuple[int, "entry_t"], None, None]:
         if all:
+            assert self.blocks is not None
+
             current = self.blocks
             while current.next is not None:
                 yield current.get_callee()
@@ -356,25 +373,10 @@ class entry_t:
         for off, c in self.children:
             yield (off, c)
 
-    # get the flow of blocks following this entrypoint
-    # yields (shift, block)
-    def node_flow(self) -> Iterator[Tuple[int, block_t]]:
-        # flow for entry's blocks
-        current = self.blocks
-        while current is not None:
-            for shift, block in current.node_flow():
-                yield (shift, block)
-            current = current.next
-
-        # flow for entry's children
-        for shift, child in self.get_children():
-            for c_shift, c_block in child.node_flow():
-                yield (shift + c_shift, c_block)
-
     # get distance to given child
     # assume self is parent of child
     def distance_to(self, child: "entry_t") -> int:
-        q = collections.deque()
+        q = deque()
 
         q.append((child, 0))
         while len(q) > 0:
@@ -389,7 +391,7 @@ class entry_t:
 
     # inject entrypoint on given state
     # return True if the ep had to be analyzed
-    def inject(self, ea: int, state: cpustate.state_t, ctx: "context_t", reset: bool = True) -> bool:
+    def inject(self, state: cpustate.state_t, reset: bool = True) -> bool:
         if reset:
             self.reset()
         had_to = self.to_analyze
@@ -401,7 +403,7 @@ class entry_t:
         # reset blocks
         self.blocks = block_t(self)
         self.cblock = self.blocks
-        utils.g_logger.debug(f"Resetting {self.entry_id()}")
+        utils.g_logger.debug(f"Resetting entry {self.entry_id()}")
 
     # get unique key identifying the ep from others
     # to be implemented by heirs
@@ -432,12 +434,13 @@ class entry_t:
 
     def __str__(self) -> str:
         out = "%s\n" % self.entry_header()
-        out += f"\t| Parents: {len([i for i in self.get_parents()])}\n"
+        out += f"\t| Parents: ({', '.join([str(i.id) for i in self.get_parents()])})\n"
 
         if len(self.operands) > 0:
             out += "\t| Operands:\n"
-            for (ea, op), shift in self.operands.items():
-                out += f"\t\t{ida_utils.addr_friendly_name(ea)}, ea: 0x{ea:x}, op: {op}, shift 0x{shift:x}\n"
+            for ea, regid, offs in self.get_operands():
+                for off in offs:
+                    out += f"\t\t{ida_utils.addr_friendly_name(ea)}, ea: 0x{ea:x}, reg {idaapi.get_reg_name(regid,8)}({regid:#x}), off {off:#x}\n"
 
         if len(self.children) > 0:
             out += "\t| Children:\n"
@@ -447,12 +450,45 @@ class entry_t:
         return out
 
 
+# travel the flows of nodes from given entrypoint
+# yields (flow root, node, shift)
+def flow_from_root(entry: entry_t, all_roots: bool = True) -> Generator[Tuple[entry_t, block_t, int], None, None]:
+    roots: Collection[Tuple[int, entry_t]] = deque()
+    roots.append((0, entry))
+
+    while len(roots) > 0:
+        rshift, root = roots.pop()
+        if all_roots:
+            roots.extend([(i + rshift, j) for i, j in root.get_children()])
+
+        blocks: Collection[int, block_t] = deque()
+        blocks.append((rshift, root.blocks))
+
+        while len(blocks) > 0:
+            bshift, node = blocks.pop()
+            yield root, node, bshift
+
+            # record next block for latter
+            if node.next is not None:
+                blocks.append((bshift, node.next))
+
+            # process blocks from direct function call before
+            if node.has_callee():
+                cshift, callee = node.get_callee()
+                blocks.append((bshift + cshift, callee.blocks))
+
+                # childrens are not in this direct flow (ex: virtual method recorded from vtable load)
+                # process them as differents roots
+                if all_roots:
+                    roots.extend([(bshift + cshift + i, j) for i, j in callee.get_children()])
+
+
 # entrypoint as a method's argument
 class arg_entry_t(entry_t):
     inject_before = True
 
     def __init__(self, ea: int, index: int):
-        super().__init__(ea)
+        super().__init__(ea, -1)
         self.index = index
 
     def get_function(self) -> int:
@@ -465,10 +501,12 @@ class arg_entry_t(entry_t):
         fct_name = ida_utils.demangle_ea(self.ea)
         return symbols.get_classname_from_ctor(fct_name), 1
 
-    def inject(self, ea: int, state: cpustate.state_t, ctx: "context_t") -> bool:
-        had_to = super().inject(ea, state, ctx, False)
-        cc = ctx.dflow_info.get_function_cc(ea)
-        cpustate.set_argument(cc, state, self.index, cpustate.sid_t(self.id))
+    def inject(self, state: cpustate.state_t) -> bool:
+        had_to = super().inject(state, False)
+
+        vdloc = state.fct.get_argloc(self.index)
+        state.set_var_from_loc(vdloc, cpustate.sid_t(self.id))
+
         return had_to
 
     def get_key(self) -> int:
@@ -478,41 +516,48 @@ class arg_entry_t(entry_t):
         return f"ep_0x{self.ea:x}_arg{self.index}"
 
     def entry_header(self) -> str:
-        return "Entry[sid=%d], arg %d of ea: 0x%x(%s), [%s]" % (
+        return "Entry[sid=%d], arg %d of %s (0x%x), [%s]" % (
             self.id,
             self.index,
-            self.ea,
             ida_utils.addr_friendly_name(self.ea),
+            self.ea,
             ("TO_ANALYZE" if self.to_analyze else "ANALYZED"),
         )
 
 
-# entry point in a register
-# as a destination operand (inject_before == False)
-class dst_reg_entry_t(entry_t):
-    def __init__(self, ea: int, fct_ea: int, reg: str):
-        super().__init__(ea)
-        self.reg = reg
+# entry point in a variable (a micro operand)
+# for destination operands (inject_before == False)
+class dst_var_entry_t(entry_t):
+    def __init__(self, ea: int, sub_ea: int, fct_ea: int, mop: ida_hexrays.mop_t):
+        super().__init__(ea, sub_ea)
+        self.mop = ida_hexrays.mop_t(mop)  # copy or it gets freed
+        assert self.mop.t in (ida_hexrays.mop_r, ida_hexrays.mop_S)
+
+        if self.mop.t == ida_hexrays.mop_r:
+            self.key = ida_hexrays.get_mreg_name(self.mop.r, ida_utils.get_ptr_size())
+        else:
+            self.key = f"stk:#{self.mop.s.off:x}"
+
         self.fct_ea = fct_ea
 
     def get_function(self) -> int:
         return self.fct_ea
 
-    def inject(self, ea: int, state: cpustate.state_t, ctx: "context_t") -> bool:
-        had_to = super().inject(ea, state, ctx)
-        state.set_register_str(self.reg, cpustate.sid_t(self.id))
+    def inject(self, state: cpustate.state_t) -> bool:
+        had_to = super().inject(state)
+        state.set_var_from_mop(self.mop, cpustate.sid_t(self.id))
         return had_to
 
     def get_key(self) -> str:
-        return self.reg
+        return self.key
 
     def entry_id(self) -> str:
-        return f"ep_0x{self.ea:x}_{self.reg}"
+        return f"ep_0x{self.ea:x}_{self.get_key()}"
 
     def entry_header(self) -> str:
-        return "Entry[sid=%d], reg %s at ea: 0x%x(%s), [%s]" % (
+        return "Entry[sid=%d], %s at ea: 0x%x(%s), [%s]" % (
             self.id,
-            self.reg,
+            self.get_key(),
             self.ea,
             ida_utils.addr_friendly_name(self.ea),
             ("TO_ANALYZE" if self.to_analyze else "ANALYZED"),
@@ -521,7 +566,7 @@ class dst_reg_entry_t(entry_t):
 
 # entry point in a register
 # as a src operand (inject_before == True)
-class src_reg_entry_t(dst_reg_entry_t):
+class src_reg_entry_t(dst_var_entry_t):
     # inject_before needs to be a static member
     # because of its use in get_entry_by_key()
     # thus two reg_entry_t classes are required
@@ -530,28 +575,27 @@ class src_reg_entry_t(dst_reg_entry_t):
 
 # entry point as a value read from a structure
 # can be used to propagate a structure ptr written & read from a structure
-class read_entry_t(dst_reg_entry_t):
+class read_entry_t(dst_var_entry_t):
     can_ramificate = False
 
-    def __init__(self, ea: int, fct_ea: int, reg: str, source: entry_t, off: int):
-        super().__init__(ea, fct_ea, reg)
+    def __init__(self, ea: int, sub_ea: int, fct_ea: int, mop: ida_hexrays.mop_t, source: entry_t, off: int):
+        super().__init__(ea, sub_ea, fct_ea, mop)
 
         # source ep & offset this ep was read from
         self.src = source
         self.src_off = off
 
     def entry_id(self) -> str:
-        return f"ep_rd_0x{self.ea:x}_{self.reg}"
+        return f"ep_rd_0x{self.ea:x}_{self.get_key()}"
 
     def add_parent(self, parent: "entry_t", shift: int) -> bool:
         raise Exception("read_entry_t are not meant to be linked with parents")
 
 
-# entry point as a callee ret value
-# with known size (static allocation)
-class ret_entry_t(dst_reg_entry_t):
-    def __init__(self, ea: int, fct_ea: int, size: int):
-        super().__init__(ea, fct_ea, cpustate.get_default_cc().ret)
+# entry point as an allocation with known size
+class alloc_entry_t(dst_var_entry_t):
+    def __init__(self, ea: int, sub_ea: int, size: int, mba: ida_hexrays.mba_t):
+        super().__init__(ea, sub_ea, mba.entry_ea, ida_hexrays.mop_t(mba.call_result_kreg, ida_utils.get_ptr_size()))
         self.size = size
 
     # retrieve name from factory function
@@ -598,39 +642,30 @@ class cst_entry_t(entry_t):
     def end_block(self, callee: entry_t, shift: int) -> bool:
         return False
 
-    def inject(self, ea: int, state: cpustate.state_t, ctx: "context_t") -> bool:
+    def inject(self, state: cpustate.state_t) -> bool:
         raise Exception(f"{self.entry_id()} is not to be injected in the data flow")
 
 
 # vtable root entry
 class vtbl_entry_t(cst_entry_t):
-    def __init__(self, ea: int):
-        super().__init__(ea)
+    def __init__(self, vtbl: vtables.vtable_t):
+        super().__init__(vtbl.ea)
+        self.vtbl = vtbl
         self.reset()  # add default block
-        self.total_xrefs = 0  # count of xref towards vtable's functions
 
-        # find vtable methods, build the model
-        i = 0
+        # make fields
         ptr_size = ida_utils.get_ptr_size()
-        for fea in ida_utils.vtable_members(ea):
-            field = entry_t.add_field(self, i, ptr_size)
+        for i, (fea, _) in enumerate(vtbl.get_members()):
+            field = entry_t.add_field(self, i * ptr_size, ptr_size)
             field.set_type(ftype_fct_t(cpustate.mem_t(fea, fea, ptr_size)))
-            self.total_xrefs += len(ida_utils.get_data_references(fea))
-            i += ptr_size
 
-    # is self derived from other
-    def is_most_derived(self, other: "vtbl_entry_t") -> bool:
-        self_refs, self_size = self.total_xrefs, self.get_boundaries()[1]
-        other_refs, other_size = other.total_xrefs, other.get_boundaries()[1]
-        if self_size > other_size:
-            return True
-        if other_size > self_size:
-            return False
-        if self_refs > other_refs:
-            return False
-        return True
+    # get most derived between self and other
+    def get_most_derived(self, other: "vtbl_entry_t") -> "vtbl_entry_t":
+        if self.vtbl.get_most_derived(other.vtbl) == self.vtbl:
+            return self
+        return other
 
-    def get_key(self) -> Any:
+    def get_key(self) -> Any:  # ea is enough to discriminate vtables
         return None
 
     def find_name(self) -> Tuple[Optional[str], int]:
@@ -640,7 +675,7 @@ class vtbl_entry_t(cst_entry_t):
         return f"ep_0x{self.ea:x}_vtbl"
 
     def entry_header(self) -> str:
-        return f"Vtable at {ida_utils.demangle_ea(self.ea)}"
+        return f"vftable {ida_utils.demangle_ea(self.ea)}"
 
 
 # records all entrypoints
@@ -648,11 +683,11 @@ class entry_record_t:
     g_next_sid = -1
 
     def __init__(self):
-        self.entries_per_sid: list[entry_t] = list()  # entry per sid
+        self.entries_per_sid: List[entry_t] = list()  # entry per sid
 
         # sorted entries, by ea for quick access
         # & by inject_before / inject_after
-        self.entries_per_ea: dict[int, Tuple[Collection[entry_t], Collection[entry_t]]] = dict()
+        self.entries_per_ea: dict[Tuple[int, int, bool], Collection[entry_t]] = defaultdict(deque)
 
     # next entry point id
     def next_id(self) -> int:
@@ -663,13 +698,12 @@ class entry_record_t:
 
     # add an entrypoint to the graph
     def add_entry(self, entry: entry_t, as_root: bool = False, inc_sid: bool = True) -> entry_t:
-        existing = self.get_entry_by_key(entry.ea, entry.__class__, entry.get_key())
+        existing = self.get_entry_by_key(entry.ea, entry.sub_ea, entry.__class__, entry.get_key())
         if existing is not None:
             return existing
 
-        if entry.ea not in self.entries_per_ea:
-            self.entries_per_ea[entry.ea] = (collections.deque(), collections.deque())
-        self.entries_per_ea[entry.ea][int(not entry.__class__.inject_before)].append(entry)
+        key = (entry.ea, entry.sub_ea, entry.__class__.inject_before)
+        self.entries_per_ea[key].append(entry)
 
         entry.id = self.next_id()
         self.entries_per_sid.append(entry)
@@ -705,15 +739,12 @@ class entry_record_t:
             if len(child.parents) == 0:
                 self.remove_entry(child)
 
-        self.entries_per_ea[entry.ea][int(not entry.__class__.inject_before)].remove(entry)
+        self.entries_per_ea[(entry.ea, entry.sub_ea, entry.__class__.inject_before)].remove(entry)
         self.entries_per_sid[entry.id] = None
 
     # all entries to inject at given ea
-    def get_entries_at(self, ea: int, inject_after: bool) -> Collection[entry_t]:
-        if ea not in self.entries_per_ea:
-            return []
-
-        return self.entries_per_ea[ea][int(inject_after)]
+    def get_entries_at(self, ea: int, sub_ea: int, inject_before: bool) -> Collection[entry_t]:
+        return self.entries_per_ea.get((ea, sub_ea, inject_before), tuple())
 
     # entry by sid
     def get_entry_by_id(self, sid: int) -> Optional[entry_t]:
@@ -722,13 +753,14 @@ class entry_record_t:
         return self.entries_per_sid[sid]
 
     # entry by ea, class & unique key identifier
-    def get_entry_by_key(self, ea: int, cls: type, key: Any = None) -> Optional[entry_t]:
-        if ea not in self.entries_per_ea:
+    def get_entry_by_key(self, ea: int, sub_ea: int, cls: type, key: Any = None) -> Optional[entry_t]:
+        eakey = (ea, sub_ea, cls.inject_before)
+        if eakey not in self.entries_per_ea:
             return None
 
         c = filter(
             lambda e: isinstance(e, cls) and e.get_key() == key,
-            self.entries_per_ea[ea][int(not cls.inject_before)],
+            self.entries_per_ea[eakey],
         )
 
         try:
@@ -736,14 +768,14 @@ class entry_record_t:
         except StopIteration:
             return None
 
-    def get_entries(self) -> Iterator[entry_t]:
+    def get_entries(self, analyzed: bool = True) -> Generator[entry_t, None, None]:
         for entry in self.entries_per_sid:
-            if entry is not None:
+            if entry is not None and not (analyzed and entry.to_analyze):
                 yield entry
 
     # yield all unexplored entrypoints
     # TODO: yield from most interesting function to less (fct having the most entrypoints)
-    def next_to_analyze(self) -> Iterator[entry_t]:
+    def next_to_analyze(self) -> Generator[entry_t, None, None]:
         current_len = len(self.entries_per_sid)
         for i in range(current_len):
             if self.entries_per_sid[i].to_analyze:
@@ -756,37 +788,22 @@ class entry_record_t:
         return out
 
 
-# defines a function
-class function_t:
+# information about a function's prototype
+class prototype_t:
     def __init__(self, ea: int):
         self.ea = ea
-        self.nargs = 0  # arguments count (minimum estimated)
-        self.cc = cpustate.get_abi()  # guessed calling convention
 
-        # optional entrypoint sid as function's ret value
-        self.ret_sid: int = -1
+        # structure returned by function
+        self.ret: Optional[entry_t] = None
 
         # is a virtual method
         self.virtual = False
 
-    def set_ret(self, sid: int):
-        self.ret_sid = sid
+    def set_ret(self, ret: entry_t):
+        self.ret = ret
 
-    def get_ret(self) -> int:
-        return self.ret_sid
-
-    def set_nargs(self, nargs: int):
-        self.nargs = nargs
-
-    def get_nargs(self) -> int:
-        return self.nargs
-
-    def set_cc(self, cc: cpustate.arch.abi_t):
-        self.cc = cc
-
-    # get IDA CM_CC_ calling convention
-    def get_ida_cc(self) -> int:
-        return self.cc.cc
+    def get_ret(self) -> Optional[entry_t]:
+        return self.ret
 
     def set_virtual(self):
         self.virtual = True
@@ -795,7 +812,7 @@ class function_t:
         return self.virtual
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, function_t) and self.ea == other.ea
+        return isinstance(other, prototype_t) and self.ea == other.ea
 
 
 # global model
@@ -804,7 +821,7 @@ class context_t:
     # init from a list of entrypoints and propagation context
     def __init__(self, entries: entry_record_t, allocators: Set[allocators.allocator_t]):
         self.allocators = allocators  # all registered allocators
-        self.functions: dict[int, function_t] = dict()  # ea -> function_t
+        self.functions: Dict[int, prototype_t] = dict()  # ea -> prototype_t
         self.graph = entries  # entrypoints tree hierarchy
 
         # information gathered by data flow
@@ -817,22 +834,12 @@ class context_t:
         # dive into callee decision
         self.dive_in: bool = False
 
-    # record all visited functions into model
-    def record_functions(self, record: Dict[int, cpustate.function_t]):
-        for ea, visited in record.items():
-            if visited.cc_not_guessed:
-                continue
-
-            fct = self.get_function(ea)
-            fct.set_nargs(visited.get_count())
-            fct.set_cc(visited.cc)
-
-    def get_function(self, ea: int) -> function_t:
+    def get_function(self, ea: int) -> prototype_t:
         if ea not in self.functions:
-            self.functions[ea] = function_t(ea)
+            self.functions[ea] = prototype_t(ea)
         return self.functions[ea]
 
-    def get_functions(self) -> Collection[function_t]:
+    def get_functions(self) -> Collection[prototype_t]:
         return self.functions.values()
 
     def get_entrypoints(self) -> entry_record_t:

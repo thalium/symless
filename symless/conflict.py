@@ -7,19 +7,16 @@ import symless.utils.ida_utils as ida_utils
 import symless.utils.utils as utils
 
 
-# for possible overlapping fields for a structure
-# which one to choose
+# when two possible fields are overlapping in a structure, select which to keep
 def fields_conflicts_solver(field: generation.field_t, old_field: generation.field_t) -> bool:
-    # care when replacing a typed field
     if old_field.has_type():
-        # do not untype our field
         if not field.has_type():
             return False
 
         return old_field.replace(field)
 
-    # default policy: replace
-    return True
+    # default: keep smallest
+    return field.size <= old_field.size
 
 
 # when converting from var field to field
@@ -32,8 +29,25 @@ def field_size_solver(field: model.field_t) -> int:
 # define less derived structure between multiple structs
 # the less derived should be the nearest from their common base
 def less_derived(candidates: List[Tuple[generation.structure_t, int]]) -> Tuple[generation.structure_t, int]:
+    # search for smallest struc with smallest shift applied
     candidates.sort(key=lambda i: (i[1], i[0].get_size()))
-    return candidates[0]
+    chosen = candidates[0]
+
+    __vftable = chosen[0].get_field(0)
+    if not isinstance(__vftable, generation.vtbl_ptr_field_t):
+        return chosen
+
+    # if we still have multiple candidates left, and they are cpp classes
+    # find the one with the less derived associated vtable
+    for struc, shift in filter(lambda c: c[1] == chosen[1] and c[0].get_size() == chosen[0].get_size(), candidates[1:]):
+        __vftable_2 = struc.get_field(0)
+        if not isinstance(__vftable_2, generation.vtbl_ptr_field_t):
+            continue
+
+        if __vftable.value.get_most_derived(__vftable_2.value) == __vftable.value:
+            chosen = (struc, shift)
+
+    return chosen
 
 
 # find which class a vtable belongs to
@@ -113,11 +127,6 @@ def get_conflicting_structures(
 
 # can we consider two structures to be duplicates & merge them
 def are_structures_identical(one: generation.structure_t, other: generation.structure_t) -> bool:
-    # even if computed size is not always right
-    # consider different sized structures to be different
-    if one.get_size() != other.get_size():
-        return False
-
     i, j = 0, 0
     while i < len(one.range) and j < len(other.range):
         off_one, size_one = one.range[i][0], one.range[i][1]
@@ -159,6 +168,10 @@ def are_structures_identical(one: generation.structure_t, other: generation.stru
             i += 1
             j += 1
 
+    # if not at the end of both structures, they are different
+    if i < len(one.range) or j < len(other.range):
+        return False
+
     return True
 
 
@@ -181,7 +194,7 @@ def merge_structures(src: generation.structure_t, dst: generation.structure_t, e
             entry.set_structure(shift, dst)
 
 
-# find & merge duplicated structures
+# try to find & merge duplicated structures
 def remove_dupes(entries: model.entry_record_t, structures: generation.structure_record_t):
     # find conflicting structures
     dupe_conflicts = get_conflicting_structures(entries)

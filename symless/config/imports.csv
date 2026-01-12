@@ -36,6 +36,8 @@ kernel32, VirtualAllocEx, malloc(2)
 kernel32, VirtualAllocExNuma, malloc(2)
 kernel32, VirtualAllocFromApp, malloc(1)
 
+KERNEL32, HeapAlloc, malloc(2)
+
 # Windows kernel
 ntoskrnl, ExAllocatePool, malloc(1)
 ntoskrnl, ExAllocatePool2, malloc(1)
@@ -58,3 +60,10 @@ ntoskrnl, ExAllocatePoolWithTagPriority, malloc(1)
 
 .dynsym, _Znwj@@GLIBCXX_, malloc # operator new(uint)
 .dynsym, _Znwm@@GLIBCXX_, malloc # operator new(ulong)
+
+libstdc++-6,  _Znwy, malloc # operator new(unsigned long long)
+
+# macOS libsystem
+/usr/lib/libSystem.B.dylib, _malloc, malloc
+/usr/lib/libSystem.B.dylib, _realloc, realloc
+/usr/lib/libSystem.B.dylib, _calloc, calloc

@@ -8,8 +8,8 @@ import tempfile
 from typing import List, Optional, Tuple
 
 # max & min supported majors
-MIN_MAJOR = 7
-MAX_MAJOR = 8
+MIN_MAJOR = 8
+MAX_MAJOR = 9
 
 
 def stderr_print(line: str):
@@ -40,20 +40,23 @@ def find_ida_Linux() -> Optional[str]:
     # find in PATH
     if "PATH" in os.environ:
         for path in os.environ["PATH"].split(":"):
-            if os.path.exists(os.path.join(path, "idat64")):
+            if os.path.exists(os.path.join(path, "idat64")) or os.path.exists(os.path.join(path, "idat")):
                 return path
 
     # find in default location
     for major in range(MAX_MAJOR, MIN_MAJOR - 1, -1):
-        for minor in range(9, 0, -1):
-            current = "%s/idapro-%d.%d" % (os.environ["HOME"], major, minor)
-            if os.path.exists(current):
-                return current
+        for minor in range(9, -1, -1):
+            p1 = "%s/idapro-%d.%d" % (os.environ["HOME"], major, minor)
+            p2 = "%s/ida-pro-%d.%d" % (os.environ["HOME"], major, minor)
+            if os.path.exists(p1):
+                return p1
+            if os.path.exists(p2):
+                return p2
     return None
 
 
 # find idat executables
-def find_idat() -> Tuple[str, str]:
+def find_idat() -> Tuple[Optional[str], str]:
     ida_dir = None
 
     # user defined IDA path
@@ -73,18 +76,23 @@ def find_idat() -> Tuple[str, str]:
         print(f'Using IDA installation: "{ida_dir}"')
 
     suffix = ".exe" if sys.platform == "win32" else ""
-    ida32 = os.path.join(ida_dir, "idat" + suffix)
-    ida64 = os.path.join(ida_dir, "idat64" + suffix)
+    idat = os.path.join(ida_dir, "idat" + suffix)
+    idat64 = os.path.join(ida_dir, "idat64" + suffix)
 
-    if not os.path.isfile(ida32):
+    if not (os.path.isfile(idat) or os.path.isfile(idat64)):
         stderr_print('Missing idat%s in "%s"' % (suffix, ida_dir))
         return None
 
-    if not os.path.isfile(ida64):
-        stderr_print('Missing idat64%s in "%s"' % (suffix, ida_dir))
-        return None
+    # earliest IDA 9 version - only idat64
+    if not os.path.isfile(idat):
+        return (None, idat64)
 
-    return (ida32, ida64)
+    # IDA 9 + - only idat
+    if not os.path.isfile(idat64):
+        return (None, idat)
+
+    # IDA 8 or earlier
+    return (idat, idat64)
 
 
 # craft IDA batch command
@@ -119,7 +127,7 @@ def run_ida_batchmode(idat: str, filepath: str) -> int:
 
 # Create .idb from 32 bits executable or .i64 from 64 bits exe
 def make_idb(ida_install: tuple, filepath: str) -> Tuple[str, int]:
-    if run_ida_batchmode(ida_install[0], filepath) == 0:
+    if ida_install[0] and run_ida_batchmode(ida_install[0], filepath) == 0:
         return (f"{filepath}.idb", 0)
 
     # 32 bits analysis failed, try 64 bits mode

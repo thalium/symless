@@ -1,6 +1,6 @@
 import enum
 import re
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import idaapi
 
@@ -9,18 +9,17 @@ import symless.utils.ida_utils as ida_utils
 import symless.utils.utils as utils
 
 # do not consider alloc bigger than this to be object allocs
-g_max_alloc = 0xFFFFFF
+g_max_alloc = 0x4000
 
 
 def valid_size(size: int):
-    return size > 0 and size <= g_max_alloc
+    return size > 0 and size < g_max_alloc
 
 
 class alloc_action_t(enum.Enum):  # allocator action
     STATIC_ALLOCATION = 0  # malloc(n)
     WRAPPED_ALLOCATOR = 1  # func(x) -> return malloc(x)
-    JUMP_TO_ALLOCATOR = 2  # func(x) -> jump malloc
-    UNDEFINED = 3
+    UNDEFINED = 2
 
 
 # a heap allocation function
@@ -43,7 +42,7 @@ class allocator_t:
     def get_name(self) -> str:
         return f"{self.type}_like_{self.index:x}"
 
-    def get_child(self, ea: int, args: tuple):
+    def get_child(self, ea: int, args: tuple) -> "allocator_t":
         child = self.__class__.__new__(self.__class__)  # is there a nicer way to do this ?
         child.__init__(ea, *args)
         return child
@@ -53,13 +52,12 @@ class allocator_t:
         pass
 
     # what type of allocation for given state + allocation size for STATIC_ALLOCATION
-    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
+    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, Any]:
         return (alloc_action_t.UNDEFINED, 0)
 
-    # for WRAPPED_ALLOCATOR action, does wrapper ret confirm it is a wrapper
+    # for WRAPPED_ALLOCATOR action, does wrapper return value confirms it is a wrapper
     def on_wrapper_ret(self, state: cpustate.state_t, call_ea: int) -> bool:
-        ret_val = state.ret.code
-        if isinstance(ret_val, cpustate.call_t) and ret_val.where == call_ea:
+        if isinstance(state.ret, cpustate.call_t) and state.ret.where == call_ea:
             return True
 
         return False
@@ -80,24 +78,16 @@ class malloc_like_t(allocator_t):
         allocator_t.__init__(self, ea, "malloc")
         self.size_index = size_index
 
-    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
-        is_jump = state.call_type == cpustate.call_type_t.JUMP
+    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, Any]:
+        if len(state.call_args) <= self.size_index:
+            return (alloc_action_t.UNDEFINED, 0)
 
-        # size parameter
-        arg = cpustate.get_argument(cpustate.get_default_cc(), state, self.size_index, False, is_jump)
-
-        # size argument comes from wrapper arguments, wrapper might be an allocator
+        arg = state.call_args[self.size_index]
         if isinstance(arg, cpustate.arg_t):
             index = arg.idx
-
-            if is_jump:
-                return (alloc_action_t.JUMP_TO_ALLOCATOR, (index,))
-
             return (alloc_action_t.WRAPPED_ALLOCATOR, (index,))
-
-        # static size - memory allocation
-        if isinstance(arg, cpustate.int_t) and valid_size(arg.get_val()):
-            return (alloc_action_t.STATIC_ALLOCATION, arg.get_val())
+        elif isinstance(arg, cpustate.int_t) and valid_size(arg.get_uval()):
+            return (alloc_action_t.STATIC_ALLOCATION, arg.get_uval())
 
         return (alloc_action_t.UNDEFINED, 0)
 
@@ -121,28 +111,23 @@ class calloc_like_t(allocator_t):
         self.count_index = count_index
         self.size_index = size_index
 
-    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, int]:
-        is_jump = state.call_type == cpustate.call_type_t.JUMP
+    def on_call(self, state: cpustate.state_t) -> Tuple[alloc_action_t, Any]:
+        if len(state.call_args) <= max(self.size_index, self.count_index):
+            return (alloc_action_t.UNDEFINED, 0)
 
-        count_arg = cpustate.get_argument(cpustate.get_default_cc(), state, self.count_index, False, is_jump)
-        size_arg = cpustate.get_argument(cpustate.get_default_cc(), state, self.size_index, False, is_jump)
-
+        count_arg = state.call_args[self.count_index]
+        size_arg = state.call_args[self.size_index]
         if isinstance(count_arg, cpustate.arg_t) and isinstance(size_arg, cpustate.arg_t):
             count_index = count_arg.idx
             size_index = size_arg.idx
-
-            if is_jump:
-                return (alloc_action_t.JUMP_TO_ALLOCATOR, (count_index, size_index))
-
             return (alloc_action_t.WRAPPED_ALLOCATOR, (count_index, size_index))
-
-        if (
+        elif (
             isinstance(count_arg, cpustate.int_t)
-            and valid_size(count_arg.get_val())
+            and valid_size(count_arg.get_uval())
             and isinstance(size_arg, cpustate.int_t)
-            and valid_size(size_arg.get_val())
+            and valid_size(size_arg.get_uval())
         ):
-            size = count_arg.get_val() * size_arg.get_val()
+            size = count_arg.get_uval() * size_arg.get_uval()
             return (alloc_action_t.STATIC_ALLOCATION, size)
 
         return (alloc_action_t.UNDEFINED, 0)

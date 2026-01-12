@@ -12,7 +12,8 @@ sys.path.append(symless_dir)
 
 import symless.allocators as allocators
 import symless.model.entrypoints as entrypoints
-import symless.model.model as model
+
+# import symless.model.model as model
 
 """ Debug script - Get all entrypoints (structures creations) identified in one binary """
 
@@ -26,15 +27,15 @@ if __name__ == "__main__":
     config_path = os.path.abspath(os.path.join(symless_dir, "symless", "config", "imports.csv"))
 
     imports = allocators.get_allocators(config_path)
-    if imports is None:
+    if not len(imports):
         print("%sNo allocators identified" % args.prefix)
-        imports = list()
+        idc.qexit(0)
 
     # get initial entrypoints
     ctx = entrypoints.retrieve_entrypoints(imports)
 
     # build entries tree
-    model.analyze_entrypoints(ctx)
+    # model.analyze_entrypoints(ctx)
 
     entries = ctx.get_entrypoints()
     allocs = ctx.get_allocators()

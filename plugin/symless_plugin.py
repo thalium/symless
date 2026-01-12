@@ -1,10 +1,10 @@
 import base64
 import collections
 import importlib
-import inspect
 import os
 import pkgutil
 import sys
+import traceback
 from typing import Collection
 
 import idaapi
@@ -15,9 +15,10 @@ import symless.utils.utils as utils
 
 
 class fixedBtn(idaapi.Form.ButtonInput):
-    def __init__(self, plugin: "SymlessPlugin"):
+    def __init__(self, plugin: "SymlessPlugin", form: "SymlessInfoForm"):
         super().__init__(self.reload, "0")
         self.plugin = plugin
+        self.form = form
 
     def reload(self, code):
         idaapi.show_wait_box("Reloading Symless..")
@@ -26,18 +27,17 @@ class fixedBtn(idaapi.Form.ButtonInput):
             # terminate all extensions
             self.plugin.term()
 
-            # reload symless code
-            reload_plugin()
+            remove_old_modules()
 
             # rebind all extensions
-            self.plugin.find_extensions()
+            self.plugin.find_extensions(reload=True)
 
         except Exception as e:
-            import traceback
-
-            utils.g_logger.critical(repr(e) + "\n" + traceback.format_exc())
-        finally:
             idaapi.hide_wait_box()
+            utils.g_logger.critical(repr(e) + "\n" + traceback.format_exc())
+        else:
+            idaapi.hide_wait_box()
+            self.form.Close(1)
 
     def get_tag(self):
         return "<Reload:%s%d:%s%s:%s:%s>" % (
@@ -72,7 +72,7 @@ class SymlessInfoForm(idaapi.Form):
             {
                 "img": idaapi.Form.StringLabel(img_html, tp=idaapi.Form.FT_HTML_LABEL, size=None),
                 "info": idaapi.Form.StringLabel(info_html, tp=idaapi.Form.FT_HTML_LABEL, size=None),
-                "reload": fixedBtn(plugin),
+                "reload": fixedBtn(plugin, self),
             },
         )
 
@@ -92,7 +92,7 @@ class SymlessPlugin(idaapi.plugin_t):
         return idaapi.PLUGIN_KEEP
 
     # find and load extensions from symless plugins folder
-    def find_extensions(self):
+    def find_extensions(self, reload: bool = False):
         for mod_info in pkgutil.walk_packages(plugins.__path__, prefix="symless.plugins."):
             if mod_info.ispkg:
                 continue
@@ -111,21 +111,27 @@ class SymlessPlugin(idaapi.plugin_t):
                     spec.loader.exec_module(module)
                 except BaseException as e:
                     sys.modules.pop(module.__name__)
-                    print(f"Error while loading extension {mod_info.name}: {e}")
+                    utils.g_logger.error(f"Error while loading extension {mod_info.name}:")
+                    utils.g_logger.error(repr(e) + "\n" + traceback.format_exc())
                     continue
 
             # module defines an extension
             if not hasattr(module, "get_plugin"):
                 continue
-
             ext: plugins.plugin_t = module.get_plugin()
+
+            # notify the extension that it has been reloaded
+            if reload:
+                ext.reload()
+
             self.ext.append(ext)
 
-    # debug - reload plugin action
+    # display info panel
     def run(self, args):
         info = SymlessInfoForm(self)
         info.Compile()
-        return info.Execute()
+        info.Execute()
+        info.Free()
 
     # term all extensions
     def term(self):
@@ -138,31 +144,13 @@ def PLUGIN_ENTRY() -> idaapi.plugin_t:
     return SymlessPlugin()
 
 
-# reload one module, by first reloading all imports from that module
-# to_reload contains all modules to reload
-def reload_module(module, to_reload: set):
-    if module not in to_reload:
-        return
-
-    # remove from set first, avoid infinite recursion if recursive imports
-    to_reload.remove(module)
-
-    # reload all imports first
-    for _, dep in inspect.getmembers(module, lambda k: inspect.ismodule(k)):
-        reload_module(dep, to_reload)
-
-    # reload the module
-    utils.g_logger.info(f"Reloading {module.__name__} ..")
-    importlib.reload(module)
-
-
-# reload all symless code
-def reload_plugin():
-    # list all modules to reload, unordered
-    to_reload = set()
-    for k, mod in sys.modules.items():
+# remove old symless modules from loaded modules
+def remove_old_modules():
+    to_remove = set()
+    for k in sys.modules.keys():
         if k.startswith("symless"):
-            to_reload.add(mod)
+            to_remove.add(k)
 
-    for mod in list(to_reload):  # copy to alter
-        reload_module(mod, to_reload)
+    for r in to_remove:
+        print(f"Removing old {r} ..")
+        del sys.modules[r]
