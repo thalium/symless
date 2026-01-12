@@ -26,7 +26,7 @@ def find_structure_name(struc: generation.structure_t) -> Collection[str]:
 
     # loop over all nodes associated to the structure
     # get names from the associated nodes
-    for root, shift, block in struc.node_flow():
+    for root, block, shift in struc.node_flow(False):
         if root != current_root:
             current_root, depth = root, 0
 
@@ -61,7 +61,7 @@ def find_structure_name(struc: generation.structure_t) -> Collection[str]:
 def define_structures_names(record: generation.structure_record_t):
     all_names = set()  # all given names record
 
-    for struc in record.get_structures():
+    for struc in record.get_structures(include_discarded=False):
         # define structure's fields names
         struc.compute_names()
 

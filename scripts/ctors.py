@@ -1,3 +1,4 @@
+import argparse
 import inspect
 import os
 import re
@@ -19,6 +20,10 @@ re_ctors = re.compile(r"\b((?:[\w_]+::)*)([\S ]+)::(~?)\2(?:\(|$)")
 """ Debug script - Find ctors/dtors in binary """
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prefix", type=str, default="")
+    args = parser.parse_args(idc.ARGV[1:])
+
     # wait for autoanalysis, we'll need its results
     idaapi.auto_wait()
 
@@ -26,10 +31,11 @@ if __name__ == "__main__":
 
     i = 0
     for vtbl in families:
-        print("Family %x:" % vtbl)
+        print("%sFamily 0x%x:" % (args.prefix, vtbl))
 
         for ctor in families[vtbl]:
-            name = ida_utils.demangle_ea(ctor)
+            fea = ctor.func.start_ea
+            name = ida_utils.demangle_ea(fea)
 
             match = re_ctors.match(name)
             if match is None:
@@ -44,8 +50,8 @@ if __name__ == "__main__":
             else:
                 typ = "[CONSTRUCTOR]"
 
-            print("  %s %x -> %s" % (typ, ctor, name))
-        print()
+            print("%s  %s 0x%x -> %s" % (args.prefix, typ, fea, name))
+        print(args.prefix)
 
         i += 1
 

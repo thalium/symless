@@ -1,4 +1,5 @@
-from typing import Dict, Tuple
+from collections import defaultdict
+from typing import Dict, List, Tuple
 
 import symless.conflict as conflict
 import symless.model.entrypoints as entrypoints
@@ -10,47 +11,60 @@ from symless.generation import *
 # create a structure's field (fixed) from an entrypoint's field (ambiguous)
 # size_solver_cb is used to choose prefered field's size
 def make_field(
-    var_field: model.field_t,
-    shift: int,
-    flow: model.entry_t,
-    block: model.block_t,
-    size_solver_cb,
-    ctx: model.context_t,
+    var_field: model.field_t, shift: int, flow: model.entry_t, block: model.block_t, size_solver_cb
 ) -> "field_t":
     var_type = var_field.get_type()
     offset = shift + var_field.offset
-    if isinstance(var_type, model.ftype_ptr_t):  # an unknown pointer
-        out = ptr_field_t(offset, flow, block)
-    elif isinstance(var_type, model.ftype_struc_t):  # a structure pointer
+
+    # unknown pointer
+    if isinstance(var_type, model.ftype_ptr_t):
+        v = var_type.value.get_uval()  # value size is assumed to be ptr_size
+        return ptr_field_t(v, offset, flow, block)
+
+    # structure pointer
+    if isinstance(var_type, model.ftype_struc_t):
+        # vtable pointer
         if isinstance(var_type.entry, model.vtbl_entry_t):
-            out = vtbl_ptr_field_t(list(var_field.type), offset, flow, block)
+            return vtbl_ptr_field_t(list(var_field.type), offset, flow, block)
+
         else:
-            out = struc_ptr_field_t(var_type.entry, offset, flow, block)
-    elif isinstance(var_type, model.ftype_fct_t):  # a function pointer
-        fea = var_type.value.get_val()
-        out = fct_ptr_field_t(ctx.get_function(fea), offset, flow, block)
-    else:  # default field
-        size = size_solver_cb(var_field)
-        out = field_t(offset, size, flow, block)
-    return out
+            return struc_ptr_field_t(var_type.entry, offset, flow, block)
+
+    # function pointer
+    if isinstance(var_type, model.ftype_fct_t):
+        fea = var_type.value.get_uval()
+        return fct_ptr_field_t(fea, offset, flow, block)
+
+    size = size_solver_cb(var_field)
+    return field_t(offset, size, flow, block)
 
 
 # fill structures models
-def define_structure(struc: structure_t, ctx: entrypoints.context_t):
-    visited = set()
+def define_structure(struc: structure_t):
+    visited: Set[Tuple[model.entry_t, model.block_t, int]] = set()
 
-    for root, shift, node in struc.node_flow():  # every node in struc's flow
+    # get structures fields from associated entries fields
+    for root, node, shift in struc.node_flow():
         # do not visit the same node twice, with the same shift
-        path_id = (node.get_owner().id, node.id, shift)
+        path_id = (node.get_owner(), node, shift)
         if path_id in visited:
             continue
         visited.add(path_id)
 
-        # compute every field
+        # add all fields from node
         for vfield in node.get_fields():
             # structure field from entrypoint field
-            field = make_field(vfield, shift, root, node, conflict.field_size_solver, ctx)
+            field = make_field(vfield, shift, root, node, conflict.field_size_solver)
             struc.set_field(field, conflict.fields_conflicts_solver)
+
+    # search for xrefs on paddings and create dummy fields for it
+    # this happens when the address of a field is used, without its content beeing accessed
+    for entry, node, shift in visited:
+        for _, _, offs in entry.get_operands():
+            for off in offs:
+                eoff = shift + off
+                if struc.has_field_at(eoff) is None and eoff < struc.get_size():
+                    struc.set_field(unk_data_field_t(eoff, node), None)
 
 
 # define which structure an entry is associated to
@@ -69,14 +83,14 @@ def associate_entry(
 
             eff_shift, eff_struc = associate_entry(field.value, entries)
             utils.g_logger.debug(
-                f"Setting {entry.entry_id()} to be a ptr to {eff_struc.get_name()}, shifted by 0x{eff_shift:x}"
+                f"{entry.entry_id()} associated with struc {eff_struc.get_name()} (shift {eff_shift:#x})"
             )
 
             entry.set_structure(eff_shift, eff_struc)
 
         else:
             # select less derived structure that flew through this ep
-            candidates = list()
+            candidates: List[Tuple[structure_t, int] | None] = list()
             for shift, parent in entry.get_parents():
                 pshift, pstruc = associate_entry(parent, entries)
                 candidates.append((pstruc, shift + pshift))
@@ -95,17 +109,15 @@ def associate_entries(entries: model.entry_record_t):
 
 # compute the owner of each defined vtable
 def select_vtables_owners(record: structure_record_t):
-    owners: Dict[vtable_t, Collection[Tuple[structure_t, int]]] = dict()
+    owners: Dict[vtable_struc_t, List[Tuple[structure_t, int]]] = defaultdict(list)
 
     # find all conflicts on owners
-    for struc in record.get_structures():
+    for struc in record.get_structures(include_discarded=False):
         for field in struc.fields.values():
             if not isinstance(field, vtbl_ptr_field_t):
                 continue
 
             _, vtbl = field.get_structure()
-            if vtbl not in owners:
-                owners[vtbl] = list()
             owners[vtbl].append((struc, field.offset))
 
     # select owner among candidates for each vtable
@@ -121,7 +133,7 @@ def define_structures(ctx: entrypoints.context_t) -> structure_record_t:
 
     # make strucs models and generate empty structures
     for struc in record.get_structures():
-        define_structure(struc, ctx)
+        define_structure(struc)
 
     # define which structure to be associated to each entry
     associate_entries(entries)

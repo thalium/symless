@@ -4,6 +4,8 @@ import idaapi
 import idautils
 import idc
 
+""" Dump all informations found in one database (types, functions, ..) """
+
 
 def report(output: str = ""):
     if len(output) == 0:
@@ -17,7 +19,10 @@ def report(output: str = ""):
 def dump_functions() -> dict:
     out = {"total": 0}
 
-    for fea in idautils.Functions():
+    all_fcts = [fea for fea in idautils.Functions()]
+    all_fcts.sort()
+
+    for fea in all_fcts:
         # only print user defined function types
         if not idaapi.is_userti(fea):
             continue
@@ -85,10 +90,10 @@ def dump_structures() -> dict:
         struc = idaapi.get_struc(sid)
 
         # do not dump hidden structs
-        if struc.props & idaapi.SF_HIDDEN:
-            continue
+        # if struc.props & idaapi.SF_HIDDEN:
+        #    continue
 
-        is_vtable = name.endswith("_vtbl")
+        is_vtable = "_vtbl" in name
 
         if is_vtable:
             out["total vtables"] += 1
@@ -136,7 +141,7 @@ def dump_local_types() -> dict:
 
     idati = idaapi.get_idati()
 
-    count = idaapi.get_ordinal_qty(idati)
+    count = idaapi.get_ordinal_count(idati)
     if count == 0 or count == 0xFFFFFFFF:
         return
 
@@ -150,7 +155,7 @@ def dump_local_types() -> dict:
     # sort by name
     types.sort(key=lambda k: str(k[1]))
 
-    for ordinal, tinfo in types:
+    for _, tinfo in types:
         # do not print types imported as structures
         name = str(tinfo)
         if idaapi.get_struc_id(name) != idaapi.BADADDR:

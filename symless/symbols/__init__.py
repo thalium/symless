@@ -3,7 +3,6 @@ from typing import Optional, Tuple
 
 import idaapi
 
-import symless.cpustate.arch as arch
 import symless.utils.ida_utils as ida_utils
 import symless.utils.utils as utils
 
@@ -22,7 +21,7 @@ re_invalid_struc_name = (
 )
 
 # invalid method field names exps & replacements
-re_invalid_method_name = ((re.compile(r"[\s]+"), "_"), (re.compile(r"[^0-9a-zA-Z_]"), ""))
+re_invalid_method_name = ((re.compile(r"[\s]+"), "_"), (re.compile(r"[^0-9a-zA-Z~_-]"), ""))
 
 
 # full method name from method signature
@@ -84,9 +83,12 @@ def get_vtable_name_from_ctor(vtable_ea: int) -> Optional[str]:
 
 # get child & parent classes names from vtable symbol
 def get_classnames_from_vtable(vtable_ea: int) -> Tuple[Optional[str], Optional[str]]:
-    if arch.is_elf():
-        return get_classnames_from_vtable_gcc(vtable_ea)
-    return get_classnames_from_vtable_msvc(vtable_ea)
+    for f in (get_classnames_from_vtable_gcc, get_classnames_from_vtable_msvc):
+        derived, parent = f(vtable_ea)
+        if derived is not None:
+            return derived, parent
+
+    return None, None
 
 
 # get child & parent classes names from vtable symbol for gcc compiled binaries

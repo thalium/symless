@@ -17,8 +17,6 @@ def ida_main():
     args = parser.parse_args(idc.ARGV[1:])
     start_analysis(args.config)
 
-    idc.qexit(0)
-
 
 """ Command line main """
 
@@ -72,3 +70,5 @@ if __name__ == "__main__":
         from symless.main import start_analysis
 
         ida_main()  # script run from IDA
+
+        idc.qexit(0)

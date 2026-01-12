@@ -18,6 +18,11 @@ def start_analysis(config_path):
         utils.g_logger.error("Unsupported arch (%s) or filetype" % arch.get_proc_name())
         return
 
+    # check that the decompiler exists
+    if not idaapi.init_hexrays_plugin():
+        utils.g_logger.error("You do not have the decompiler for this architecture")
+        return
+
     # rebase if required
     if config.g_settings.rebase_db:
         err = idaapi.rebase_program(-idaapi.get_imagebase(), idaapi.MSF_FIXONCE)
@@ -45,12 +50,12 @@ def start_analysis(config_path):
     model.analyze_entrypoints(ctx)
     utils.print_delay("Entrypoints graph built", start, time.time())
 
-    # structure generation
+    # build structures
     start = time.time()
     strucs = structures.define_structures(ctx)
     utils.print_delay("Structures defined", start, time.time())
 
-    # structure generation
+    # import structures in IDA
     start = time.time()
     generate.import_structures(strucs)
     generate.import_context(ctx)

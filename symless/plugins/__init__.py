@@ -4,6 +4,10 @@ class plugin_t:
     def __init__(self):
         pass
 
+    # the extension has been reloaded
+    def reload(self):
+        pass
+
     # terminate & clean the extension
     def term(self):
         pass

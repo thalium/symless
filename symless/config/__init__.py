@@ -32,6 +32,7 @@ class Settings:
             settings = json.load(config)
             for key, value in settings.items():
                 self.__setattr__(key, value)
+        self.debug = self.log_level <= LOG_LEVEL_DEBUG
 
 
 # global settings variable

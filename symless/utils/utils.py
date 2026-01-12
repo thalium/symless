@@ -48,3 +48,12 @@ def print_delay(prefix: str, start: float, end: float):
     min = int(delay / 60)
     sec = delay - (min * 60)
     g_logger.info("%s in %s%s" % (prefix, "%d minutes and " % min if min > 0 else "", "%d seconds" % sec))
+
+
+# convert integer to given sign & size
+def to_c_integer(value: int, sizeof: int, signed: bool = True) -> int:
+    mask = 1 << (sizeof * 8)
+    out = value & (mask - 1)
+    if signed and (out & (mask >> 1)):
+        out -= mask
+    return out
