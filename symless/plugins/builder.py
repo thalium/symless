@@ -24,6 +24,17 @@ COLOR_TARGET = idaapi.COLOR_OPND1
 SCOLOR_TARGET = chr(COLOR_TARGET)
 
 
+def create_hex_validator(parent):   
+    try:  
+        from PyQt5.QtGui import QRegularExpressionValidator  
+        regex = QtCore.QRegularExpression("^([0-9]+)|(0x[0-9a-fA-F]+)$")  
+        return QRegularExpressionValidator(regex, parent)  
+    except (ImportError, AttributeError):  
+        try:  
+            return QtGui.QIntValidator(0, 0x7FFFFFFF, parent)  
+        except:  
+            return None
+
 # Structure builder plugin extension
 class BuilderPlugin(plugin_t):
     def __init__(self):
@@ -496,7 +507,9 @@ class BuilderFromStkTab(BuilderTabBase):
         self.size = QtWidgets.QLineEdit(self)
         self.size.setText("0x0")
         self.size.setMaxLength(16)
-        self.size.setValidator(QtGui.QRegExpValidator(QtCore.QRegExp("^([0-9]+)|(0x[0-9a-fA-F]+)$"), self.size))
+        validator = create_hex_validator(self.size)  
+        if validator:  
+            self.size.setValidator(validator)
         self.size.setWhatsThis("Size of the in-stack structure.")
         lsize = QtWidgets.QLabel(self)
         lsize.setText("Structure size")
@@ -575,7 +588,9 @@ class BuilderFromPtrTab(BuilderTabBase):
         self.shift = QtWidgets.QLineEdit(self)
         self.shift.setText("0x0")
         self.shift.setMaxLength(16)
-        self.shift.setValidator(QtGui.QRegExpValidator(QtCore.QRegExp("^([0-9]+)|(0x[0-9a-fA-F]+)$"), self.shift))
+        validator = create_hex_validator(self.shift)  
+        if validator:  
+            self.shift.setValidator(validator) 
         self.shift.setWhatsThis("Shift to apply to the propagated structure pointer.")
         lshift = QtWidgets.QLabel(self)
         lshift.setText("Shifted by")
